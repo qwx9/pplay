@@ -1,0 +1,79 @@
+.TH PPLAY 1
+.SH NAME
+pplay \- visual PCM audio player
+.SH SYNOPSIS
+.B pplay
+[
+.B -cs
+] [
+.B pcm file
+]
+.SH DESCRIPTION
+.I Pplay
+is a PCM audio player which shows a time-domain graphical plot of the data.
+It operates on the same format used by the audio device (see
+.IR audio (3)).
+.PP
+At startup, the program loads the audio data in its entirety into memory,
+either from the file provided as argument, or from standard in.
+By default,
+.I pplay
+writes audio data back to
+.BR /dev/audio .
+With the
+.B -c
+option, it writes to standard out instead.
+.PP
+The graphical plot shows a time-domain representation of the audio data's left channel.
+The
+.B -s
+option enables plotting its right channel below the left.
+.PP
+The current position in the buffer is shown by a vertical line.
+It can be set using the left mouse button.
+.PP
+.I Pplay
+loops a section of the audio data indefinitely.
+At start up, this section is set to the entire file.
+The section's beginning and end are shown by vertical markers of the same color.
+Both are set by using the middle mouse button,
+relative to the current position in the buffer:
+clicking to the left of the position marker will set the loop start position, and vice versa.
+The
+.B r
+key resets both loop positions to their default values.
+.PP
+By default, the graphical plot spans the dimensions of the window.
+It can be zoomed in or out with the
+.L +
+and
+.L -
+keys, and reset with the
+.L z
+key.
+The view can then be moved by holding the right mouse button,
+and moving the cursor horizontally.
+.PP
+The space key pauses playback.
+The
+.L b
+key resets the position to that of the loop start position.
+.PP
+The
+.L w
+key prompts the user to enter a file path to write the looped section to.
+.SH EXAMPLES
+Load and play an mp3 file (see
+.IR audio (1)):
+.IP
+.EX
+% audio/mp3dec <file.mp3 | pplay
+.EE
+.SH "SEE ALSO"
+.IR audio (1),
+.IR audio (3)
+.SH HISTORY
+.I Pplay
+first appeared in 9front (October, 2017).
+.SH BUGS
+Most mouse actions redraw the entire plot and may interrupt audio playback for too long.
