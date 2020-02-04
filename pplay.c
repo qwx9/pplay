@@ -7,17 +7,11 @@
 #include "dat.h"
 #include "fns.h"
 
-enum{
-	Ndelay = 44100 / 25,
-	Nchunk = Ndelay * 4,
-	Nreadsz = 4*1024*1024,
-};
-
-ulong nbuf;
-uchar *buf, *bufp, *bufe, *viewp, *viewe, *viewmax, *loops, *loope;
-int T;
-int stereo;
-int zoom = 1;
+int ifd;
+uchar *pcmbuf;
+vlong filesz, nsamp;
+int file, stereo, zoom = 1;
+vlong seekp, T, loops, loope;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
@@ -25,21 +19,40 @@ static QLock lck;
 static int pause;
 static int cat;
 
+void *
+emalloc(ulong n)
+{
+	void *p;
+
+	if((p = mallocz(n, 1)) == nil)
+		sysfatal("emalloc: %r");
+	setmalloctag(p, getcallerpc(&n));
+	return p;
+}
+
 static void
 athread(void *)
 {
 	int n, fd;
+	uchar *p;
 
 	if((fd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
 		sysfatal("open: %r");
+	p = pcmbuf;
 	for(;;){
 		qlock(&lck);
-		n = bufp + Nchunk >= loope ? loope - bufp : Nchunk;
-		if(write(fd, bufp, n) != n)
+		n = seekp + Nchunk >= loope ? loope - seekp : Nchunk;
+		if(!file)
+			p = pcmbuf + seekp;
+		else if(read(ifd, pcmbuf, n) != n)
+			fprint(2, "read: %r\n");
+		if(write(fd, p, n) != n){
+			fprint(2, "athread: %r\n");
 			break;
-		bufp += n;
-		if(bufp >= loope)
-			bufp = loops;
+		}
+		seekp += n;
+		if(seekp >= loope)
+			setpos(loops);
 		update();
 		qunlock(&lck);
 		yield();
@@ -65,93 +78,49 @@ prompt(void)
 }
 
 static void
-setzoom(int n)
+reallocbuf(ulong n)
 {
-	int m;
-
-	m = zoom + n;
-	if(m < 1 || m > nbuf / Dx(screen->r))
-		return;
-	zoom = m;
-	if(nbuf / zoom / Dx(screen->r) != T)
-		redrawbg();
-}
-
-static void
-setpan(int n)
-{
-	n *= T * 4 * 16;
-	if(zoom == 1 || viewp == buf && n < 0 || viewp == viewmax && n > 0)
-		return;
-	viewp += n;
-	redrawbg();
-}
-
-static void
-setloop(void)
-{
-	int n;
-	uchar *p;
-
-	n = (mc->xy.x - screen->r.min.x) * T * 4;
-	p = viewp + n;
-	if(p < buf || p > bufe)
-		return;
-	if(p < bufp)
-		loops = p;
-	else
-		loope = p;
-	drawview();
-}
-
-static void
-setpos(void)
-{
-	int n;
-	uchar *p;
-
-	n = (mc->xy.x - screen->r.min.x) * T * 4;
-	p = viewp + n;
-	if(p < loops || p > loope - Nchunk)
-		return;
-	bufp = p;
-	update();
-}
-
-static void
-bufrealloc(ulong n)
-{
-	int off;
-
-	off = bufp - buf;
-	if((buf = realloc(buf, n)) == nil)
+	if((pcmbuf = realloc(pcmbuf, n)) == nil)
 		sysfatal("realloc: %r");
-	bufe = buf + n;
-	bufp = buf + off;
 }
 
 static void
 initbuf(int fd)
 {
 	int n, sz;
+	vlong ofs;
+	Dir *d;
 
-	bufrealloc(nbuf += Nreadsz);
+	reallocbuf(filesz += Nreadsz);
+	ifd = fd;
+	if(file){
+		if((d = dirfstat(fd)) == nil)
+			sysfatal("dirfstat: %r");
+		filesz = d->length;
+		nsamp = filesz / 4;
+		free(d);
+		return;
+	}
 	if((sz = iounit(fd)) == 0)
 		sz = 8192;
-	while((n = read(fd, bufp, sz)) > 0){
-		bufp += n;
-		if(bufp + sz >= bufe)
-			bufrealloc(nbuf += Nreadsz);
+	ofs = 0;
+	while((n = read(fd, pcmbuf+ofs, sz)) > 0){
+		ofs += n;
+		if(ofs + sz >= filesz)
+			reallocbuf(filesz += Nreadsz);
 	}
 	if(n < 0)
 		sysfatal("read: %r");
-	bufrealloc(nbuf = bufp - buf);
+	filesz = ofs;
+	reallocbuf(filesz);
+	nsamp = filesz / 4;
+	close(fd);
 }
 
 static void
 usage(void)
 {
-	fprint(2, "usage: %s [-cs] [pcm]\n", argv0);
+	fprint(2, "usage: %s [-cfs] [pcm]\n", argv0);
 	threadexits("usage");
 }
 
@@ -165,19 +134,14 @@ threadmain(int argc, char **argv)
 
 	ARGBEGIN{
 	case 'c': cat = 1; break;
+	case 'f': file = 1; break;
 	case 's': stereo = 1; break;
 	default: usage();
 	}ARGEND
 	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
 		sysfatal("open: %r");
 	initbuf(fd);
-	close(fd);
-	nbuf /= 4;
-	bufp = buf;
-	viewp = buf;
-	loops = buf;
-	loope = bufe;
-	initview();
+	initdrw();
 	if((kc = initkeyboard(nil)) == nil)
 		sysfatal("initkeyboard: %r");
 	if((mc = initmouse(nil, screen)) == nil)
@@ -195,35 +159,31 @@ threadmain(int argc, char **argv)
 		case 0:
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
-			redrawbg();
 			mo = mc->Mouse;
+			redraw();
 			break;
 		case 1:
 			switch(mc->buttons){
-			case 1: setpos(); break;
-			case 2: setloop(); break;
+			case 1: setofs(mc->xy.x - screen->r.min.x); break;
+			case 2: setloop(mc->xy.x - screen->r.min.x); break;
 			case 4: setpan(mo.xy.x - mc->xy.x); break;
-			case 8: setzoom(1); break;
-			case 16: setzoom(-1); break;
+			case 8: setzoom(1, 1); break;
+			case 16: setzoom(-1, 1); break;
 			}
 			mo = mc->Mouse;
 			break;
 		case 2:
 			switch(r){
-			case ' ':
-				if(pause ^= 1)
-					qlock(&lck);
-				else
-					qunlock(&lck);
-				break;
-			case 'b': bufp = loops; update(); break;
-			case 'r': loops = buf; loope = bufe; drawview(); break;
+			case ' ': ((pause ^= 1) ? qlock : qunlock)(&lck); break;
+			case 'b': setpos(loops); break;
+			case 'r': loops = 0; loope = filesz; update(); break;
 			case Kdel:
 			case 'q': threadexitsall(nil);
-			case 'z': if(zoom == 1) break; zoom = 1; redrawbg(); break;
-			case '-': setzoom(-1); break;
-			case '=':
-			case '+': setzoom(1); break;
+			case 'z': setzoom(-zoom + 1, 0); break;
+			case '-': setzoom(-1, 0); break;
+			case '=': setzoom(1, 0); break;
+			case '_': setzoom(-1, 1); break;
+			case '+': setzoom(1, 1); break;
 			case 'w':
 				if((p = prompt()) != nil)
 					writepcm(p);

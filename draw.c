@@ -5,7 +5,6 @@
 #include "fns.h"
 
 enum{
-	Cbg,
 	Csamp,
 	Cline,
 	Cloop,
@@ -15,6 +14,11 @@ static Image *col[Ncol];
 static Image *viewbg, *view;
 static Rectangle liner;
 static Point statp;
+static vlong views, viewe, viewmax, bgofs;
+static int bgscalyl, bgscalyr, bgscalf;
+static uchar bgbuf[Nchunk * 200];
+
+static void (*drawbg)(void);
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -27,42 +31,42 @@ eallocimage(Rectangle r, int repl, ulong col)
 }
 
 static void
-drawstat(void)
-{
-	char s[64];
-
-	snprint(s, sizeof s, "T %d p %zd", T, bufp-buf);
-	string(screen, statp, col[Cline], ZP, font, s);
-}
-
-static void
 drawsamps(void)
 {
-	int x, yl, yr, w, scal, lmin, lmax, rmin, rmax;
-	short s;
-	uchar *p, *e;
+	int x, n, lmin, lmax, rmin, rmax;
+	s16int s;
+	uchar *p, *e, *et;
 	Rectangle l, r;
 
-	w = T * 4;
-	p = viewp;
-	x = 0;
-	yl = viewbg->r.max.y / (stereo ? 4 : 2);
-	yr = viewbg->r.max.y - yl;
-	scal = 32767 / yl;
-	while(p < viewe){
-		e = p + w;
-		if(e > viewe)
-			e = viewe;
+	if(bgofs >= viewe)
+		return;
+	if(!file){
+		p = pcmbuf + bgofs;
+		n = viewe - bgofs < sizeof bgbuf ? viewe - bgofs : sizeof bgbuf;
+	}else{
+		seek(ifd, bgofs, 0);
+		n = read(ifd, bgbuf, sizeof bgbuf);
+		seek(ifd, seekp, 0);
+		p = bgbuf;
+	}
+	e = p + n;
+	x = (bgofs - views) / T;
+	while(p < e){
+		n = filesz - bgofs < T ? filesz - bgofs : T;
+		if(n > e - p)
+			n -= n - (e - p);
+		bgofs += n;
+		et = p + n;
 		lmin = lmax = 0;
 		rmin = rmax = 0;
-		while(p < e){
-			s = (short)(p[1] << 8 | p[0]);
+		while(p < et){
+			s = (s16int)(p[1] << 8 | p[0]);
 			if(s < lmin)
 				lmin = s;
 			else if(s > lmax)
 				lmax = s;
 			if(stereo){
-				s = (short)(p[3] << 8 | p[2]);
+				s = (s16int)(p[3] << 8 | p[2]);
 				if(s < rmin)
 					rmin = s;
 				else if(s > rmax)
@@ -70,13 +74,46 @@ drawsamps(void)
 			}
 			p += 4;
 		}
-		l = Rect(x, yl - lmax / scal, x+1, yl - lmin / scal);
+		l = Rect(x, bgscalyl - lmax / bgscalf,
+			x+1, bgscalyl - lmin / bgscalf);
+		r = Rect(x, bgscalyr - rmax / bgscalf,
+			x+1, bgscalyr - rmin / bgscalf);
 		draw(viewbg, l, col[Csamp], nil, ZP);
-		if(stereo){
-			r = Rect(x, yr - rmax / scal, x+1, yr - rmin / scal);
+		if(stereo)
 			draw(viewbg, r, col[Csamp], nil, ZP);
-		}
 		x++;
+	}
+}
+
+static void
+drawstat(void)
+{
+	char s[64];
+
+	snprint(s, sizeof s, "T %lld p %lld", T/4, seekp);
+	string(screen, statp, col[Cline], ZP, font, s);
+}
+
+static void
+drawview(void)
+{
+	int x;
+	Rectangle r;
+
+	draw(view, view->r, viewbg, nil, ZP);
+	if(loops != 0 && loops >= views){
+		x = (loops - views) / T;
+		r = view->r;
+		r.min.x += x;
+		r.max.x = r.min.x + 1;
+		draw(view, r, col[Cloop], nil, ZP);
+	}
+	if(loope != filesz && loope >= views){
+		x = (loope - views) / T;
+		r = view->r;
+		r.min.x += x;
+		r.max.x = r.min.x + 1;
+		draw(view, r, col[Cloop], nil, ZP);
 	}
 }
 
@@ -85,65 +122,85 @@ update(void)
 {
 	int x;
 
-	x = screen->r.min.x + (bufp - viewp) / 4 / T;
-	if(liner.min.x == x || bufp < viewp && x > liner.min.x)
-		return;
+	drawbg();
+	drawview();
+	x = screen->r.min.x + (seekp - views) / T;
+	//if(liner.min.x == x || seekp < views && x > liner.min.x)
+	//	return;
 	draw(screen, screen->r, view, nil, ZP);
 	liner.min.x = x;
 	liner.max.x = x + 1;
-	if(bufp >= viewp)
+	if(seekp >= views)
 		draw(screen, liner, col[Cline], nil, ZP);
 	drawstat();
 	flushimage(display, 1);
 }
 
 void
-drawview(void)
+setzoom(int Δz, int pow)
 {
-	int x;
-	Rectangle r;
+	int z;
 
-	draw(view, view->r, viewbg, nil, ZP);
-	if(loops != buf && loops >= viewp){
-		x = (loops - viewp) / 4 / T;
-		r = view->r;
-		r.min.x += x;
-		r.max.x = r.min.x + 1;
-		draw(view, r, col[Cloop], nil, ZP);
-	}
-	if(loope != bufe && loope >= viewp){
-		x = (loope - viewp) / 4 / T;
-		r = view->r;
-		r.min.x += x;
-		r.max.x = r.min.x + 1;
-		draw(view, r, col[Cloop], nil, ZP);
-	}
-	draw(screen, screen->r, view, nil, ZP);
-	draw(screen, liner, col[Cline], nil, ZP);
-	drawstat();
-	flushimage(display, 1);
+	if(!pow)
+		z = zoom + Δz;
+	else if(Δz < 0)
+		z = zoom >> -Δz;
+	else
+		z = zoom << Δz;
+	if(z < 1 || z > nsamp / Dx(screen->r))
+		return;
+	zoom = z;
+	redraw();
 }
 
 void
-redrawbg(void)
+setpan(int Δx)
 {
-	int w, x;
+	Δx *= T;
+	if(zoom == 1 || views == 0 && Δx < 0 || views >= viewmax && Δx > 0)
+		return;
+	views += Δx;
+	redraw();
+}
+
+void
+setloop(vlong ofs)
+{
+	ofs *= T;
+	ofs += views;
+	if(ofs < 0 || ofs > filesz)
+		return;
+	if(ofs < seekp)
+		loops = ofs;
+	else
+		loope = ofs;
+	update();
+}
+
+void
+setpos(vlong ofs)
+{
+	if(ofs < loops || ofs > loope - Nchunk)
+		return;
+	seekp = ofs;
+	if(file)
+		seek(ifd, ofs, 0);
+	update();
+}
+
+void
+setofs(vlong ofs)
+{
+	setpos(views + ofs * T);
+}
+
+static void
+resetdraw(void)
+{
+	int x;
 	Rectangle viewr, midr;
 
-	T = nbuf / zoom / Dx(screen->r);
-	if(T == 0)
-		T = 1;
-	w = Dx(screen->r) * T * 4;
-	viewmax = bufe - w;
-	if(viewp < buf)
-		viewp = buf;
-	else if(viewp > viewmax)
-		viewp = viewmax;
-	viewe = viewp + w;
-	x = screen->r.min.x + (bufp - viewp) / 4 / T;
-	liner = screen->r;
-	liner.min.x = x;
-	liner.max.x = x + 1;
+	x = screen->r.min.x + (seekp - views) / T;
 	viewr = rectsubpt(screen->r, screen->r.min);
 	freeimage(viewbg);
 	freeimage(view);
@@ -158,18 +215,43 @@ redrawbg(void)
 			screen->r.min.y + (Dy(screen->r) - font->height) / 2 + 1);
 	}else
 		statp = Pt(screen->r.min.x, screen->r.max.y - font->height);
-	drawsamps();
-	drawview();
+	liner = screen->r;
+	liner.min.x = x;
+	liner.max.x = x + 1;
+	bgscalyl = viewbg->r.max.y / (stereo ? 4 : 2);
+	bgscalyr = viewbg->r.max.y - bgscalyl;
+	bgscalf = 32767 / bgscalyl;
 }
 
 void
-initview(void)
+redraw(void)
+{
+	vlong span;
+
+	T = filesz / zoom / Dx(screen->r) & ~3;
+	if(T == 0)
+		T = 4;
+	span = Dx(screen->r) * T;
+	viewmax = filesz - span;
+	if(views < 0)
+		views = 0;
+	else if(views > viewmax)
+		views = viewmax;
+	viewe = views + span;
+	bgofs = views;
+	resetdraw();
+	update();
+}
+
+void
+initdrw(void)
 {
 	if(initdraw(nil, nil, "pplay") < 0)
 		sysfatal("initdraw: %r");
-	col[Cbg] = display->black;
 	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x440000FF);
 	col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0x884400FF);
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
-	redrawbg();
+	drawbg = drawsamps;
+	loope = filesz;
+	redraw();
 }

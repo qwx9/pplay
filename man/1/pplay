@@ -4,9 +4,9 @@ pplay \- visual PCM audio player
 .SH SYNOPSIS
 .B pplay
 [
-.B -cs
+.B -cfs
 ] [
-.B pcm file
+.B pcmfile
 ]
 .SH DESCRIPTION
 .I Pplay
@@ -15,7 +15,10 @@ It operates on the same format used by the audio device (see
 .IR audio (3)).
 .PP
 At startup, the program loads the audio data in its entirety into memory,
-either from the file provided as argument, or from standard in.
+unless the
+.B -f
+option is given, in which case the input file must be seekable.
+Data is read either from the file provided as argument, or from standard in.
 By default,
 .I pplay
 writes audio data back to
@@ -51,6 +54,11 @@ and
 keys, and reset with the
 .L z
 key.
+The
+.L _
+and
+.L =
+keys zoom in by greater increments.
 The view can then be moved by holding the right mouse button,
 and moving the cursor horizontally.
 .PP
@@ -69,11 +77,20 @@ Load and play an mp3 file (see
 .EX
 % audio/mp3dec <file.mp3 | pplay
 .EE
+.PP
+Use
+.IR play (1)
+to decode any known audio format:
+.IP
+.EX
+% play -o /fd/1 file | pplay
+.EE
 .SH "SEE ALSO"
 .IR audio (1),
+.IR play (1),
 .IR audio (3)
 .SH HISTORY
 .I Pplay
 first appeared in 9front (October, 2017).
 .SH BUGS
-Most mouse actions redraw the entire plot and may interrupt audio playback for too long.
+Most mouse actions redraw the entire plot.

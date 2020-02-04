@@ -6,5 +6,5 @@ OFILES=\
 	edit.$O\
 	pplay.$O\
 
-HFILES=
+HFILES=dat.h fns.h
 </sys/src/cmd/mkone
