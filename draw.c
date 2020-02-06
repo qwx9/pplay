@@ -40,19 +40,23 @@ drawsamps(void)
 
 	if(bgofs >= viewe)
 		return;
-	if(!file){
+	n = viewe - bgofs;
+	if(n > sizeof bgbuf)
+		n = sizeof bgbuf;
+	if(n > T)
+		n -= n % T;
+	if(!file)
 		p = pcmbuf + bgofs;
-		n = viewe - bgofs < sizeof bgbuf ? viewe - bgofs : sizeof bgbuf;
-	}else{
+	else{
 		seek(ifd, bgofs, 0);
-		n = read(ifd, bgbuf, sizeof bgbuf);
+		n = read(ifd, bgbuf, n);
 		seek(ifd, seekp, 0);
 		p = bgbuf;
 	}
 	e = p + n;
 	x = (bgofs - views) / T;
 	while(p < e){
-		n = filesz - bgofs < T ? filesz - bgofs : T;
+		n = T;
 		if(n > e - p)
 			n -= n - (e - p);
 		bgofs += n;
