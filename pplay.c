@@ -160,7 +160,7 @@ threadmain(int argc, char **argv)
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
 			mo = mc->Mouse;
-			redraw();
+			redraw(1);
 			break;
 		case 1:
 			switch(mc->buttons){

@@ -5,6 +5,6 @@ void	setpan(int);
 void	setloop(vlong);
 void	setpos(vlong);
 void	setofs(vlong);
-void	redraw(void);
+void	redraw(int);
 void	initdrw(void);
 void*	emalloc(ulong);

@@ -154,7 +154,7 @@ setzoom(int Δz, int pow)
 	if(z < 1 || z > nsamp / Dx(screen->r))
 		return;
 	zoom = z;
-	redraw();
+	redraw(0);
 }
 
 void
@@ -164,7 +164,7 @@ setpan(int Δx)
 	if(zoom == 1 || views == 0 && Δx < 0 || views >= viewmax && Δx > 0)
 		return;
 	views += Δx;
-	redraw();
+	redraw(0);
 }
 
 void
@@ -208,7 +208,7 @@ resetdraw(void)
 	viewr = rectsubpt(screen->r, screen->r.min);
 	freeimage(viewbg);
 	freeimage(view);
-	viewbg = eallocimage(viewr, 0, DBlack);
+	viewbg = eallocimage(viewr, 0, DNofill);
 	view = eallocimage(viewr, 0, DBlack);
 	if(stereo){
 		midr = viewr;
@@ -228,7 +228,7 @@ resetdraw(void)
 }
 
 void
-redraw(void)
+redraw(int all)
 {
 	vlong span;
 
@@ -243,7 +243,9 @@ redraw(void)
 		views = viewmax;
 	viewe = views + span;
 	bgofs = views;
-	resetdraw();
+	if(all)
+		resetdraw();
+	draw(viewbg, viewbg->r, display->black, nil, ZP);
 	update();
 }
 
@@ -257,5 +259,5 @@ initdrw(void)
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
 	drawbg = drawsamps;
 	loope = filesz;
-	redraw();
+	redraw(1);
 }
