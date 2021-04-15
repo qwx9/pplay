@@ -146,6 +146,7 @@ threadmain(int argc, char **argv)
 		sysfatal("initkeyboard: %r");
 	if((mc = initmouse(nil, screen)) == nil)
 		sysfatal("initmouse: %r");
+	mo.xy = ZP;
 	Alt a[] = {
 		{mc->resizec, nil, CHANRCV},
 		{mc->c, &mc->Mouse, CHANRCV},
@@ -163,6 +164,8 @@ threadmain(int argc, char **argv)
 			redraw(1);
 			break;
 		case 1:
+			if(eqpt(mo.xy, ZP))
+				mo = mc->Mouse;
 			switch(mc->buttons){
 			case 1: setofs(mc->xy.x - screen->r.min.x); break;
 			case 2: setloop(mc->xy.x - screen->r.min.x); break;
