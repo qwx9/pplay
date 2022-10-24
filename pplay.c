@@ -62,8 +62,11 @@ toggleplay(void)
 	static int play;
 
 	if(play ^= 1){
-		if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
-			sysfatal("open: %r");
+		if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0){
+			fprint(2, "toggleplay: %r\n");
+			play = 0;
+			return;
+		}
 		if(threadcreate(athread, nil, mainstacksize) < 0)
 			sysfatal("threadcreate: %r");
 	}else{
