@@ -15,9 +15,9 @@ vlong seekp, T, loops, loope;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
-static QLock lck;
 static int pause;
 static int cat;
+static int afd = -1;
 
 void *
 emalloc(ulong n)
@@ -33,20 +33,19 @@ emalloc(ulong n)
 static void
 athread(void *)
 {
-	int n, fd;
+	int n;
 	uchar *p;
 
-	if((fd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
-		sysfatal("open: %r");
 	p = pcmbuf;
 	for(;;){
-		qlock(&lck);
+		if(afd < 0)
+			return;
 		n = seekp + Nchunk >= loope ? loope - seekp : Nchunk;
 		if(!file)
 			p = pcmbuf + seekp;
 		else if(read(ifd, pcmbuf, n) != n)
 			fprint(2, "read: %r\n");
-		if(write(fd, p, n) != n){
+		if(write(afd, p, n) != n){
 			fprint(2, "athread: %r\n");
 			break;
 		}
@@ -54,10 +53,8 @@ athread(void *)
 		if(seekp >= loope)
 			setpos(loops);
 		update();
-		qunlock(&lck);
 		yield();
 	}
-	close(fd);
 }
 
 static char *
@@ -66,12 +63,7 @@ prompt(void)
 	int n;
 	static char buf[256];
 
-	memset(buf, 0, sizeof buf);
-	if(!pause)
-		qlock(&lck);
-	n = enter("path:", buf, sizeof(buf)-UTFmax, mc, kc, nil);
-	if(!pause)
-		qunlock(&lck);
+	n = enter("path:", buf, sizeof(buf)-UTFmax, mc, kc, _screen);
 	if(n < 0)
 		return nil;
 	return buf;
@@ -153,6 +145,8 @@ threadmain(int argc, char **argv)
 		{kc->c, &r, CHANRCV},
 		{nil, nil, CHANEND}
 	};
+	if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
+		sysfatal("open: %r");
 	if(threadcreate(athread, nil, mainstacksize) < 0)
 		sysfatal("threadcreate: %r");
 	for(;;){
@@ -177,7 +171,16 @@ threadmain(int argc, char **argv)
 			break;
 		case 2:
 			switch(r){
-			case ' ': ((pause ^= 1) ? qlock : qunlock)(&lck); break;
+			case ' ':
+				if(pause ^= 1){
+					if(!cat)
+						close(afd);
+					afd = -1;
+				}else if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
+					sysfatal("open: %r");
+				else if(threadcreate(athread, nil, mainstacksize) < 0)
+					sysfatal("threadcreate: %r");
+				break;
 			case 'b': setpos(loops); break;
 			case 'r': loops = 0; loope = filesz; update(); break;
 			case Kdel:
