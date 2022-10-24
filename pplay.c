@@ -15,7 +15,6 @@ vlong seekp, T, loops, loope;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
-static int pause;
 static int cat;
 static int afd = -1;
 
@@ -54,6 +53,23 @@ athread(void *)
 			setpos(loops);
 		update();
 		yield();
+	}
+}
+
+static void
+toggleplay(void)
+{
+	static int play;
+
+	if(play ^= 1){
+		if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
+			sysfatal("open: %r");
+		if(threadcreate(athread, nil, mainstacksize) < 0)
+			sysfatal("threadcreate: %r");
+	}else{
+		if(!cat)
+			close(afd);
+		afd = -1;
 	}
 }
 
@@ -145,10 +161,7 @@ threadmain(int argc, char **argv)
 		{kc->c, &r, CHANRCV},
 		{nil, nil, CHANEND}
 	};
-	if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
-		sysfatal("open: %r");
-	if(threadcreate(athread, nil, mainstacksize) < 0)
-		sysfatal("threadcreate: %r");
+	toggleplay();
 	for(;;){
 		switch(alt(a)){
 		case 0:
@@ -171,16 +184,7 @@ threadmain(int argc, char **argv)
 			break;
 		case 2:
 			switch(r){
-			case ' ':
-				if(pause ^= 1){
-					if(!cat)
-						close(afd);
-					afd = -1;
-				}else if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0)
-					sysfatal("open: %r");
-				else if(threadcreate(athread, nil, mainstacksize) < 0)
-					sysfatal("threadcreate: %r");
-				break;
+			case ' ': toggleplay(); break;
 			case 'b': setpos(loops); break;
 			case 'r': loops = 0; loope = filesz; update(); break;
 			case Kdel:
