@@ -90,11 +90,45 @@ drawsamps(void)
 }
 
 static void
+b2t(uvlong ofs, int *th, int *tm, int *ts, int *tμ)
+{
+	uvlong nsamp;
+
+	nsamp = ofs / 4;
+	*ts = nsamp / 44100;
+	*tm = *ts / 60;
+	*th = *tm / 60;
+	*tμ = 100 * (nsamp - *ts * 44100) / 44100;
+	*ts %= 60;
+}
+
+static void
 drawstat(void)
 {
-	char s[64];
+	int th, tm, ts, tμ;
+	uvlong ssamp;
+	char s[256], *p;
 
-	snprint(s, sizeof s, "T %lld p %lld", T/4, seekp);
+	ssamp = seekp / 4;
+	ts = ssamp / 44100;
+	tm = ts / 60;
+	th = tm / 60;
+	tμ = 100 * (ssamp - ts * 44100) / 44100;
+	ts %= 60;
+	p = seprint(s, s+sizeof s, "T %lld @ %02d:%02d:%02d.%03d (%llud) ⋅ ",
+		T/4, th, tm, ts, tμ, ssamp);
+	if(loops != 0 && loops >= views){
+		b2t(loops, &th, &tm, &ts, &tμ);
+		p = seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%llud) ↺ ",
+			th, tm, ts, tμ, loops);
+	}else
+		p = seprint(p, s+sizeof s, "0 ↺ ");
+	if(loope != filesz){
+		b2t(loope, &th, &tm, &ts, &tμ);
+		seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%llud)",
+			th, tm, ts, tμ, loope);
+	}else
+		seprint(p, s+sizeof s, "∞");
 	string(screen, statp, col[Cline], ZP, font, s);
 }
 
@@ -112,7 +146,7 @@ drawview(void)
 		r.max.x = r.min.x + 1;
 		draw(view, r, col[Cloop], nil, ZP);
 	}
-	if(loope != filesz && loope >= views){
+	if(loope != filesz ){
 		x = (loope - views) / T;
 		r = view->r;
 		r.min.x += x;
