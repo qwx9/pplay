@@ -1,4 +1,4 @@
-void	writepcm(char*);
+int	cmd(char*);
 void	update(void);
 void	setzoom(int, int);
 void	setpan(int);

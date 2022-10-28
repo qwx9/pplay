@@ -77,13 +77,13 @@ toggleplay(void)
 }
 
 static char *
-prompt(void)
+prompt(Rune r)
 {
 	int n;
-	static char buf[256];
+	static char buf[512];
 
-	n = enter("path:", buf, sizeof(buf)-UTFmax, mc, kc, _screen);
-	if(n < 0)
+	snprint(buf, sizeof buf, "%C", r);
+	if((n = enter(nil, buf, sizeof(buf)-UTFmax, mc, kc, _screen)) < 0)
 		return nil;
 	return buf;
 }
@@ -189,7 +189,7 @@ threadmain(int argc, char **argv)
 			switch(r){
 			case ' ': toggleplay(); break;
 			case 'b': setpos(loops); break;
-			case 'r': loops = 0; loope = filesz; update(); break;
+			case Kesc: loops = 0; loope = filesz; update(); break;
 			case Kdel:
 			case 'q': threadexitsall(nil);
 			case 'z': setzoom(-zoom + 1, 0); break;
@@ -197,9 +197,11 @@ threadmain(int argc, char **argv)
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;
 			case '+': setzoom(1, 1); break;
-			case 'w':
-				if((p = prompt()) != nil)
-					writepcm(p);
+			default:
+				if((p = prompt(r)) == nil)
+					break;
+				if(cmd(p) < 0)
+					fprint(2, "cmd \"%s\" failed: %r\n", p);
 				break;
 			}
 			break;
