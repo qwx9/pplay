@@ -1,4 +1,5 @@
 int	cmd(char*);
+void	initcmd(void);
 void	update(void);
 void	setzoom(int, int);
 void	setpan(int);

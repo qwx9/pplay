@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <thread.h>
 #include "dat.h"
 #include "fns.h"
 
@@ -40,10 +41,35 @@ writebuf(int fd)
 	return 0;
 }
 
+static int epfd[2];
+
+static void
+rc(void *s)
+{
+	close(epfd[1]);
+	dup(epfd[0], 0);
+	close(epfd[0]);
+	procexecl(nil, "/bin/rc", "rc", "-c", s, nil);
+	sysfatal("procexec: %r");
+}
+
+static int
+pipeto(char *arg)
+{
+	if(pipe(epfd) < 0)
+		sysfatal("pipe: %r");
+	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
+		sysfatal("procrfork: %r");
+	close(epfd[0]);
+	writebuf(epfd[1]);
+	close(epfd[1]);
+	return 0;
+}
+
 /* the entire string is treated as the filename, ie.
  * spaces and any other weird characters will be part
  * of it */
-int
+static int
 writeto(char *arg)
 {
 	int r, fd;
@@ -81,16 +107,30 @@ cmd(char *s)
 		s += n;
 	}
 	switch(r){
-//	case 'd': delete(s); break;
-//	case 'c': cut(s); break;
-//	case 'p': paste(s); break;
-//	case 'x': crop(s); break;
-//	case '^': exchange(s); break;
-//	case '|': pipeto(s); break;
-//	case '<': pipefrom(s); break;
+//	case 'd': return delete(s);
+//	case 'c': return cut(s);
+//	case 'p': return paste(s);
+//	case 'x': return crop(s);
+//	case '^': return exchange(s);
+	case '|': return pipeto(s);
+//	case '<': return pipefrom(s);
 	case 'w': return writeto(s);
-//	case 'r': readfrom(s); break;
+//	case 'r': return readfrom(s);
 	default: werrstr("unknown command %C", r); break;
 	}
 	return -1;
+}
+
+static void
+catch(void *, char *msg)
+{
+	if(strstr(msg, "closed pipe"))
+		noted(NCONT);
+	noted(NDFLT);
+}
+
+void
+initcmd(void)
+{
+	notify(catch);
 }

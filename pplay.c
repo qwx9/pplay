@@ -79,11 +79,10 @@ toggleplay(void)
 static char *
 prompt(Rune r)
 {
-	int n;
 	static char buf[512];
 
 	snprint(buf, sizeof buf, "%C", r);
-	if((n = enter(nil, buf, sizeof(buf)-UTFmax, mc, kc, _screen)) < 0)
+	if(enter(nil, buf, sizeof(buf)-UTFmax, mc, kc, _screen) < 0)
 		return nil;
 	return buf;
 }
@@ -164,6 +163,7 @@ threadmain(int argc, char **argv)
 		{kc->c, &r, CHANRCV},
 		{nil, nil, CHANEND}
 	};
+	initcmd();
 	toggleplay();
 	for(;;){
 		switch(alt(a)){
