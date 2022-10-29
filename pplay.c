@@ -198,7 +198,7 @@ threadmain(int argc, char **argv)
 			case '_': setzoom(-1, 1); break;
 			case '+': setzoom(1, 1); break;
 			default:
-				if((p = prompt(r)) == nil)
+				if((p = prompt(r)) == nil || strlen(p) == 0)
 					break;
 				if(cmd(p) < 0)
 					fprint(2, "cmd \"%s\" failed: %r\n", p);
