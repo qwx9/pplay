@@ -43,14 +43,14 @@ drawsamps(void*)
 again:
 		draw(viewbg, viewbg->r, display->black, nil, ZP);
 		n = viewe - views;
-		if(!file)
+		/*if(!file)*/
 			p = pcmbuf + views;
-		else{
+		/*else{
 			seek(ifd, bgofs, 0);
 			n = read(ifd, bgbuf, n);
 			seek(ifd, seekp, 0);
 			p = bgbuf;
-		}
+		}*/
 		e = p + n;
 		x = 0;
 		while(p < e){
