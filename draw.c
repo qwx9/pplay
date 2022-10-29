@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <thread.h>
 #include <draw.h>
 #include "dat.h"
 #include "fns.h"
@@ -14,11 +15,9 @@ static Image *col[Ncol];
 static Image *viewbg, *view;
 static Rectangle liner;
 static Point statp;
-static vlong views, viewe, viewmax, bgofs;
+static vlong views, viewe, viewmax;
 static int bgscalyl, bgscalyr, bgscalf;
-static uchar bgbuf[Nchunk * 200];
-
-static void (*drawbg)(void);
+static Channel *drawc;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -31,61 +30,63 @@ eallocimage(Rectangle r, int repl, ulong col)
 }
 
 static void
-drawsamps(void)
+drawsamps(void*)
 {
 	int x, n, lmin, lmax, rmin, rmax;
 	s16int s;
 	uchar *p, *e, *et;
 	Rectangle l, r;
 
-	if(bgofs >= viewe)
-		return;
-	n = viewe - bgofs;
-	if(n > sizeof bgbuf)
-		n = sizeof bgbuf;
-	if(n > T)
-		n -= n % T;
-	if(!file)
-		p = pcmbuf + bgofs;
-	else{
-		seek(ifd, bgofs, 0);
-		n = read(ifd, bgbuf, n);
-		seek(ifd, seekp, 0);
-		p = bgbuf;
-	}
-	e = p + n;
-	x = (bgofs - views) / T;
-	while(p < e){
-		n = T;
-		if(n > e - p)
-			n -= n - (e - p);
-		bgofs += n;
-		et = p + n;
-		lmin = lmax = 0;
-		rmin = rmax = 0;
-		while(p < et){
-			s = (s16int)(p[1] << 8 | p[0]);
-			if(s < lmin)
-				lmin = s;
-			else if(s > lmax)
-				lmax = s;
-			if(stereo){
-				s = (s16int)(p[3] << 8 | p[2]);
-				if(s < rmin)
-					rmin = s;
-				else if(s > rmax)
-					rmax = s;
-			}
-			p += 4;
+	for(;;){
+		recvul(drawc);
+		lockdisplay(display);
+again:
+		draw(viewbg, viewbg->r, display->black, nil, ZP);
+		n = viewe - views;
+		if(!file)
+			p = pcmbuf + views;
+		else{
+			seek(ifd, bgofs, 0);
+			n = read(ifd, bgbuf, n);
+			seek(ifd, seekp, 0);
+			p = bgbuf;
 		}
-		l = Rect(x, bgscalyl - lmax / bgscalf,
-			x+1, bgscalyl - lmin / bgscalf);
-		r = Rect(x, bgscalyr - rmax / bgscalf,
-			x+1, bgscalyr - rmin / bgscalf);
-		draw(viewbg, l, col[Csamp], nil, ZP);
-		if(stereo)
-			draw(viewbg, r, col[Csamp], nil, ZP);
-		x++;
+		e = p + n;
+		x = 0;
+		while(p < e){
+			if(nbrecvul(drawc) == 1)
+				goto again;
+			n = T;
+			if(n > e - p)
+				n -= n - (e - p);
+			et = p + n;
+			lmin = lmax = 0;
+			rmin = rmax = 0;
+			while(p < et){
+				s = (s16int)(p[1] << 8 | p[0]);
+				if(s < lmin)
+					lmin = s;
+				else if(s > lmax)
+					lmax = s;
+				if(stereo){
+					s = (s16int)(p[3] << 8 | p[2]);
+					if(s < rmin)
+						rmin = s;
+					else if(s > rmax)
+						rmax = s;
+				}
+				p += 4;
+			}
+			l = Rect(x, bgscalyl - lmax / bgscalf,
+				x+1, bgscalyl - lmin / bgscalf);
+			r = Rect(x, bgscalyr - rmax / bgscalf,
+				x+1, bgscalyr - rmin / bgscalf);
+			draw(viewbg, l, col[Csamp], nil, ZP);
+			if(stereo)
+				draw(viewbg, r, col[Csamp], nil, ZP);
+			x++;
+		}
+		unlockdisplay(display);
 	}
 }
 
@@ -160,7 +161,7 @@ update(void)
 {
 	int x;
 
-	drawbg();
+	lockdisplay(display);
 	drawview();
 	x = screen->r.min.x + (seekp - views) / T;
 	//if(liner.min.x == x || seekp < views && x > liner.min.x)
@@ -172,6 +173,7 @@ update(void)
 		draw(screen, liner, col[Cline], nil, ZP);
 	drawstat();
 	flushimage(display, 1);
+	unlockdisplay(display);
 }
 
 void
@@ -266,6 +268,7 @@ redraw(int all)
 {
 	vlong span;
 
+	lockdisplay(display);
 	T = filesz / zoom / Dx(screen->r) & ~3;
 	if(T == 0)
 		T = 4;
@@ -276,10 +279,10 @@ redraw(int all)
 	else if(views > viewmax)
 		views = viewmax;
 	viewe = views + span;
-	bgofs = views;
 	if(all)
 		resetdraw();
-	draw(viewbg, viewbg->r, display->black, nil, ZP);
+	unlockdisplay(display);
+	nbsendul(drawc, 1);
 	update();
 }
 
@@ -288,10 +291,15 @@ initdrw(void)
 {
 	if(initdraw(nil, nil, "pplay") < 0)
 		sysfatal("initdraw: %r");
+	display->locking = 1;
+	unlockdisplay(display);
 	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x440000FF);
 	col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0x884400FF);
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
-	drawbg = drawsamps;
 	loope = filesz;
+	if((drawc = chancreate(sizeof(ulong), 0)) == nil)
+		sysfatal("chancreate: %r");
+	if(proccreate(drawsamps, nil, mainstacksize) < 0)
+		sysfatal("proccreate: %r");
 	redraw(1);
 }
