@@ -39,9 +39,10 @@ drawsamps(void*)
 
 	for(;;){
 		recvul(drawc);
-		lockdisplay(display);
 again:
+		lockdisplay(display);
 		draw(viewbg, viewbg->r, display->black, nil, ZP);
+		unlockdisplay(display);
 		n = viewe - views;
 		/*if(!file)*/
 			p = pcmbuf + views;
@@ -81,12 +82,13 @@ again:
 				x+1, bgscalyl - lmin / bgscalf);
 			r = Rect(x, bgscalyr - rmax / bgscalf,
 				x+1, bgscalyr - rmin / bgscalf);
+		lockdisplay(display);
 			draw(viewbg, l, col[Csamp], nil, ZP);
+		unlockdisplay(display);
 			if(stereo)
 				draw(viewbg, r, col[Csamp], nil, ZP);
 			x++;
 		}
-		unlockdisplay(display);
 	}
 }
 
@@ -244,7 +246,7 @@ resetdraw(void)
 	viewr = rectsubpt(screen->r, screen->r.min);
 	freeimage(viewbg);
 	freeimage(view);
-	viewbg = eallocimage(viewr, 0, DNofill);
+	viewbg = eallocimage(viewr, 0, DBlack);
 	view = eallocimage(viewr, 0, DBlack);
 	if(stereo){
 		midr = viewr;
@@ -297,7 +299,7 @@ initdrw(void)
 	col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0x884400FF);
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
 	loope = filesz;
-	if((drawc = chancreate(sizeof(ulong), 0)) == nil)
+	if((drawc = chancreate(sizeof(ulong), 4)) == nil)
 		sysfatal("chancreate: %r");
 	if(proccreate(drawsamps, nil, mainstacksize) < 0)
 		sysfatal("proccreate: %r");
