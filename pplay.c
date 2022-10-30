@@ -29,6 +29,24 @@ emalloc(ulong n)
 	return p;
 }
 
+static int
+setpri(int pri)
+{
+	int n, fd, pid;
+	char path[32];
+
+	if((pid = getpid()) == 0)
+		return -1;
+	snprint(path, sizeof path, "/proc/%d/ctl", pid);
+	if((fd = open(path, OWRITE)) < 0)
+		return -1;
+	n = fprint(fd, "pri %d\n", pri);
+	close(fd);
+	if(n < 0)
+		return -1;
+	return 0;
+}
+
 static void
 athread(void *)
 {
@@ -124,7 +142,6 @@ initbuf(int fd)
 	filesz = ofs;
 	reallocbuf(filesz);
 	nsamp = filesz / 4;
-	close(fd);
 }
 
 static void
@@ -151,6 +168,7 @@ threadmain(int argc, char **argv)
 	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
 		sysfatal("open: %r");
 	initbuf(fd);
+	close(fd);
 	initdrw();
 	if((kc = initkeyboard(nil)) == nil)
 		sysfatal("initkeyboard: %r");
@@ -164,6 +182,8 @@ threadmain(int argc, char **argv)
 		{nil, nil, CHANEND}
 	};
 	initcmd();
+	if(setpri(13) < 0)
+		fprint(2, "setpri: %r\n");
 	toggleplay();
 	for(;;){
 		switch(alt(a)){
