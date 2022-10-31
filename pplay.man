@@ -2,7 +2,7 @@
 .SH NAME
 pplay \- visual PCM audio player
 .SH SYNOPSIS
-.B pplay
+.B audio/pplay
 [
 .B -cfs
 ] [
@@ -92,5 +92,3 @@ to decode any known audio format:
 .SH HISTORY
 .I Pplay
 first appeared in 9front (October, 2017).
-.SH BUGS
-Most mouse actions redraw the entire plot.
