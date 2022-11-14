@@ -113,17 +113,17 @@ drawstat(void)
 	char s[256], *p;
 
 	b2t(dot.pos, &th, &tm, &ts, &tμ);
-	p = seprint(s, s+sizeof s, "T %lld @ %02d:%02d:%02d.%03d (%llud) ⋅ ",
+	p = seprint(s, s+sizeof s, "T %zd @ %02d:%02d:%02d.%03d (%zd) ⋅ ",
 		T/4, th, tm, ts, tμ, dot.pos/4);
 	if(dot.from.pos > 0){
 		b2t(dot.from.pos, &th, &tm, &ts, &tμ);
-		p = seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%llud) ↺ ",
+		p = seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%zd) ↺ ",
 			th, tm, ts, tμ, dot.from.pos/4);
 	}else
 		p = seprint(p, s+sizeof s, "0 ↺ ");
 	if(dot.to.pos != totalsz){
 		b2t(dot.to.pos, &th, &tm, &ts, &tμ);
-		seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%llud)",
+		seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%zd)",
 			th, tm, ts, tμ, dot.to.pos/4);
 	}else
 		seprint(p, s+sizeof s, "∞");
