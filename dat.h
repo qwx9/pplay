@@ -1,14 +1,35 @@
+typedef struct Chunk Chunk;
+typedef struct Pos Pos;
+typedef struct Dot Dot;
+
 enum{
-	Ndelay = 44100 / 25,
-	Nchunk = Ndelay * 4,
-	Nreadsz = 4*1024*1024,
+	Rate = 44100,
+	WriteRate = 25,
+	WriteDelay = Rate / WriteRate,	/* 1764 default delay */
+	Sampsz = 2 * 2,
+	Outsz = WriteDelay * Sampsz,
+	Iochunksz = 1*1024*1024,	/* ≈ 6 sec. at 44.1 kHz */
+	Ioreadsz = Iochunksz / 32,
 };
+struct Chunk{
+	uchar *buf;
+	usize bufsz;
+	Chunk *left;
+	Chunk *right;
+};
+struct Pos{
+	usize pos;	/* bytes */
+};
+extern struct Dot{
+	Pos;
+	Pos from;
+	Pos to;
+};
+extern Dot dot;
+extern usize totalsz;
 
-extern int ifd;
-extern uchar *pcmbuf;
-extern vlong filesz, nsamp;
-
-extern vlong seekp, T, loops, loope;
-
-extern int file, stereo;
+extern int stereo;
 extern int zoom;
+
+#define MIN(x,y)	((x) < (y) ? (x) : (y))
+#define MAX(x,y)	((x) > (y) ? (x) : (y))

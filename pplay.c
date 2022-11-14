@@ -7,68 +7,36 @@
 #include "dat.h"
 #include "fns.h"
 
-int ifd;
-uchar *pcmbuf;
-vlong filesz, nsamp;
-int file, stereo, zoom = 1;
-vlong seekp, T, loops, loope;
+int stereo, zoom = 1;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
 static int cat;
 static int afd = -1;
-
-void *
-emalloc(ulong n)
-{
-	void *p;
-
-	if((p = mallocz(n, 1)) == nil)
-		sysfatal("emalloc: %r");
-	setmalloctag(p, getcallerpc(&n));
-	return p;
-}
-
-static int
-setpri(int pri)
-{
-	int n, fd, pid;
-	char path[32];
-
-	if((pid = getpid()) == 0)
-		return -1;
-	snprint(path, sizeof path, "/proc/%d/ctl", pid);
-	if((fd = open(path, OWRITE)) < 0)
-		return -1;
-	n = fprint(fd, "pri %d\n", pri);
-	close(fd);
-	if(n < 0)
-		return -1;
-	return 0;
-}
+static uchar sbuf[Iochunksz];
 
 static void
 athread(void *)
 {
-	int n;
+	int nerr;
 	uchar *p;
+	usize n;
 
-	p = pcmbuf;
+	nerr = 0;
 	for(;;){
-		if(afd < 0)
+		if(afd < 0 || nerr > 10)
 			return;
-		n = seekp + Nchunk >= loope ? loope - seekp : Nchunk;
-		if(!file)
-			p = pcmbuf + seekp;
-		else if(read(ifd, pcmbuf, n) != n)
-			fprint(2, "read: %r\n");
-		if(write(afd, p, n) != n){
+		if((p = getbuf(dot, Outsz, sbuf, &n)) == nil){
 			fprint(2, "athread: %r\n");
+			nerr++;
+			continue;
+		}
+		if(write(afd, p, n) != n){
+			fprint(2, "athread write: %r (nerr %d)\n", nerr);
 			break;
 		}
-		seekp += n;
-		if(seekp >= loope)
-			setpos(loops);
+		nerr = 0;
+		advance(&dot, n);
 		update();
 		yield();
 	}
@@ -106,48 +74,9 @@ prompt(Rune r)
 }
 
 static void
-reallocbuf(ulong n)
-{
-	if((pcmbuf = realloc(pcmbuf, n)) == nil)
-		sysfatal("realloc: %r");
-}
-
-static void
-initbuf(int fd)
-{
-	int n, sz;
-	vlong ofs;
-	Dir *d;
-
-	reallocbuf(filesz += Nreadsz);
-	ifd = fd;
-	if(file){
-		if((d = dirfstat(fd)) == nil)
-			sysfatal("dirfstat: %r");
-		filesz = d->length;
-		nsamp = filesz / 4;
-		free(d);
-		return;
-	}
-	if((sz = iounit(fd)) == 0)
-		sz = 8192;
-	ofs = 0;
-	while((n = read(fd, pcmbuf+ofs, sz)) > 0){
-		ofs += n;
-		if(ofs + sz >= filesz)
-			reallocbuf(filesz += Nreadsz);
-	}
-	if(n < 0)
-		sysfatal("read: %r");
-	filesz = ofs;
-	reallocbuf(filesz);
-	nsamp = filesz / 4;
-}
-
-static void
 usage(void)
 {
-	fprint(2, "usage: %s [-cfs] [pcm]\n", argv0);
+	fprint(2, "usage: %s [-cs] [pcm]\n", argv0);
 	threadexits("usage");
 }
 
@@ -161,13 +90,13 @@ threadmain(int argc, char **argv)
 
 	ARGBEGIN{
 	case 'c': cat = 1; break;
-	case 'f': file = 1; break;
 	case 's': stereo = 1; break;
 	default: usage();
 	}ARGEND
 	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
 		sysfatal("open: %r");
-	initbuf(fd);
+	if(loadin(fd) < 0)
+		sysfatal("inittrack: %r");
 	close(fd);
 	initdrw();
 	if((kc = initkeyboard(nil)) == nil)
@@ -208,8 +137,8 @@ threadmain(int argc, char **argv)
 		case 2:
 			switch(r){
 			case ' ': toggleplay(); break;
-			case 'b': setpos(loops); break;
-			case Kesc: loops = 0; loope = filesz; update(); break;
+			case 'b': setjump(dot.from.pos); break;
+			case Kesc: setrange(0, totalsz); update(); break;
 			case Kdel:
 			case 'q': threadexitsall(nil);
 			case 'z': setzoom(-zoom + 1, 0); break;

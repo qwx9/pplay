@@ -6,6 +6,7 @@ OFILES=\
 	cmd.$O\
 	draw.$O\
 	pplay.$O\
+	util.$O\
 
 HFILES=dat.h fns.h
 </sys/src/cmd/mkone

@@ -4,44 +4,356 @@
 #include "dat.h"
 #include "fns.h"
 
-static int
-writediskbuf(int fd)
-{
-	int n, m, iosz;
+/* stupidest implementation with the least amount of state to keep track of */
 
-	seek(ifd, loops, 0);
-	if((iosz = iounit(fd)) == 0)
-		iosz = 8192;
-	for(m=loope-loops; m>0;){
-		n = m < iosz ? m : iosz;
-		if(read(ifd, pcmbuf, n) != n)
-			return -1;
-		if(write(fd, pcmbuf, n) != n)
-			return -1;
-		m -= n;
+Dot dot;
+usize totalsz;
+static Chunk norris = {.left = &norris, .right = &norris};
+static Chunk *held;
+static uchar plentyofroom[Iochunksz];
+static int cutheld;
+static int epfd[2];
+
+static Chunk *
+newchunk(usize n)
+{
+	Chunk *c;
+
+	assert((n & 3) == 0);
+	c = emalloc(sizeof *c);
+	c->bufsz = n;
+	c->buf = emalloc(c->bufsz);
+	return c;
+}
+
+static Chunk *
+clonechunk(void)
+{
+	Chunk *c;
+
+	assert(held != nil);
+	c = newchunk(held->bufsz);
+	memcpy(c->buf, held->buf, c->bufsz);
+	return c;
+}
+
+static void
+freechunk(Chunk *c)
+{
+	if(c == nil)
+		return;
+	free(c->buf);
+	free(c);
+}
+
+static void
+linkchunk(Chunk *left, Chunk *c)
+{
+	c->right = left->right;
+	c->left = left;
+	c->right->left = c;
+	left->right = c;
+}
+
+static void
+unlinkchunk(Chunk *c)
+{
+	c->left->right = c->right;
+	c->right->left = c->left;
+	c->left = c->right = nil;
+}
+
+/* stupidest possible approach for now: minimal bookkeeping */
+static Chunk *
+p2c(usize p, usize *off)
+{
+	Chunk *c;
+
+	c = norris.right;
+	while(p > c->bufsz){
+		p -= c->bufsz;
+		c = c->right;
 	}
-	seek(ifd, seekp, 0);
+	if(off != nil)
+		*off = p;
+	assert(c != &norris);
+	return c;
+}
+static usize
+c2p(Chunk *tc)
+{
+	Chunk *c;
+	usize p;
+
+	p = 0;
+	c = norris.right;
+	while(c != tc){
+		p += c->bufsz;
+		c = c->right;
+	}
+	return p;
+}
+
+void
+setrange(usize from, usize to)
+{
+	dot.from.pos = from;
+	dot.to.pos = to;
+}
+
+int
+setpos(usize off)
+{
+	if(off < dot.from.pos || off > dot.to.pos){
+		werrstr("cannot jump outside of loop bounds\n");
+		return -1;
+	}
+	setrange(0, totalsz);
+	dot.pos = off;
 	return 0;
+}
+
+void
+jump(usize off)
+{
+	dot.pos = off;
+}
+
+static int
+holdchunk(int cut)
+{
+	if(held != nil){
+		if(held == p2c(dot.pos, nil))
+			return 0;
+		else if(cutheld){
+			unlinkchunk(held);
+			freechunk(held);
+		}
+	}
+	held = p2c(dot.from.pos, nil);
+	cutheld = cut;
+	if(cut){
+		setpos(dot.from.pos);
+		unlinkchunk(held);
+	}
+	return 0;
+}
+
+static Chunk *
+merge(Chunk *left, Chunk *right)
+{
+	if(left->buf == nil || right->buf == nil){
+		werrstr("can\'t merge self into void");
+		return nil;
+	}
+	if(left->buf != right->buf){
+		left->buf = erealloc(left->buf, left->bufsz + right->bufsz, left->bufsz);
+		memmove(left->buf + left->bufsz, right->buf, right->bufsz);
+	}else
+		right->buf = nil;
+	left->bufsz += right->bufsz;
+	unlinkchunk(right);
+	freechunk(right);
+	return 0;
+}
+
+/* does not modify dot range; merges range then splits
+ * at left and right offset */
+static void
+split(void)
+{
+	usize n, p, Δ;
+	Chunk *c, *from, *to, *tc;
+
+	from = p2c(dot.pos, &p);
+	to = p2c(dot.to.pos, nil);
+	if(from != to){
+		for(p=dot.pos; p<dot.to.pos; p+=n){
+			tc = from->right;
+			assert(tc != &norris);
+			n = tc->bufsz;
+			from = merge(from, tc);
+		}
+	}
+	if(p < dot.from.pos){
+		Δ = dot.from.pos - p;
+		c = newchunk(Δ);
+		memcpy(c->buf, from->buf, Δ);
+		linkchunk(from->left, c);
+	}
+	tc = p2c(dot.to.pos, &p);
+	p += tc->bufsz;
+	if(dot.to.pos < p){
+		Δ = p - dot.to.pos;
+		c = newchunk(Δ);
+		memcpy(c->buf, tc->buf + dot.to.pos, Δ);
+		linkchunk(from, c);
+	}
+}
+
+uchar *
+getbuf(Dot d, usize n, uchar *scratch, usize *boff)
+{
+	uchar *bp, *p;
+	usize Δbuf, Δloop, m, off, Δ;
+	Chunk *c;
+
+	c = p2c(d.pos, &off);
+	p = c->buf + off;
+	m = n;
+	bp = scratch;
+	while(m > 0){
+		Δloop = d.to.pos - d.pos;
+		Δbuf = c->bufsz - off;
+		if(m < Δloop && m < Δbuf){
+			Δ = m;
+			memcpy(bp, p, Δ);
+			d.pos += Δ;
+		}else if(Δloop <= Δbuf){
+			Δ = Δloop;
+			memcpy(bp, p, Δ);
+			d.pos = d.from.pos;
+			c = p2c(d.from.pos, nil);
+			off = 0;
+			p = c->buf;
+		}else{
+			if(c == &norris)
+				c = c->right;
+			Δ = Δbuf;
+			memcpy(bp, p, Δ);
+			d.pos += Δ;
+			c = c->right;
+			off = 0; 
+			p = c->buf;
+		}
+		bp += Δ;
+		m -= Δ;
+	}
+	*boff = n;
+	return scratch;
+}
+
+void
+advance(Dot *d, usize n)
+{
+	usize Δ, Δbuf, Δloop, m, off;
+	Chunk *c;
+
+	c = p2c(d->pos, &off);
+	m = n;
+	while(m > 0){
+		Δloop = d->to.pos - d->pos;
+		Δbuf = c->bufsz - off;
+		if(m < Δloop && m < Δbuf){
+			d->pos += m;
+			break;
+		}else if(Δloop < Δbuf){
+			Δ = Δloop;
+			d->pos = d->from.pos;
+			c = p2c(d->from.pos, nil);
+			off = 0;
+		}else{
+			Δ = Δbuf;
+			d->pos += Δ;
+			c = c->right;
+			off = 0;
+		}
+		m -= Δ;
+	}
+}
+
+static int
+paste(char *)
+{
+	Chunk *c, *l, *dotc;
+
+	c = clonechunk();
+	if(dot.from.pos == dot.to.pos){		/* insert */
+		linkchunk(p2c(dot.to.pos, nil), c);
+		setrange(dot.to.pos, dot.to.pos + c->bufsz);
+		totalsz += c->bufsz;
+	}else{						/* replace */
+		dotc = p2c(dot.pos, nil);
+		l = dotc->left;
+		totalsz -= dotc->bufsz;
+		unlinkchunk(dotc);
+		freechunk(dotc);
+		linkchunk(l, c);
+		setrange(dot.from.pos, dot.from.pos + c->bufsz);
+		totalsz += c->bufsz;
+	}
+	return 0;
+}
+
+static int
+copy(char *)
+{
+	split();
+	holdchunk(0);
+	return 0;
+}
+
+static int
+cut(char *)
+{
+	split();
+	totalsz -= p2c(dot.pos, nil)->bufsz;
+	holdchunk(1);
+	return 0;
+}
+
+static Chunk *
+readintochunks(int fd)
+{
+	int n;
+	usize off;
+	Chunk *c, *nc;
+
+	c = newchunk(Iochunksz);
+	linkchunk(&norris, c);
+	for(off=0;; off+=n){
+		if(off == Iochunksz){
+			totalsz += Iochunksz;
+			nc = newchunk(Iochunksz);
+			linkchunk(c, nc);
+			c = nc;
+			off = 0;
+		}
+		if((n = read(fd, c->buf+off, Ioreadsz)) <= 0)
+			break;
+	}
+	close(fd);
+	if(n < 0)
+		fprint(2, "readintochunks: %r\n");
+	c->buf = erealloc(c->buf, off, c->bufsz);
+	c->bufsz = off;
+	totalsz += c->bufsz;
+	return norris.right;
 }
 
 static int
 writebuf(int fd)
 {
-	int n, iosz;
-	uchar *p, *e;
+	usize n, m;
+	uchar *p;
+	Dot d;
 
-	if((iosz = iounit(fd)) == 0)
-		iosz = 8192;
-	for(p=pcmbuf+loops, e=pcmbuf+loope; p<e;){
-		n = e - p < iosz ? e - p : iosz;
-		if(write(fd, p, n) != n)
+	d.pos = d.from.pos = dot.from.pos;
+	d.to.pos = dot.to.pos;
+	for(m=d.to.pos-d.from.pos; m>0;){
+		n = sizeof plentyofroom < m ? sizeof plentyofroom : m;
+		if((p = getbuf(d, n, plentyofroom, &n)) == nil){
+			fprint(2, "writebuf: getbuf won't feed\n");
 			return -1;
-		p += n;
+		}
+		if((n = write(fd, p, m)) != n){
+			fprint(2, "writebuf: short write not %zd\n", n);
+			return -1;
+		}
+		m -= n;
 	}
 	return 0;
 }
-
-static int epfd[2];
 
 static void
 rc(void *s)
@@ -74,7 +386,7 @@ writeto(char *arg)
 {
 	int r, fd;
 
-	if(loope - loops == 0){
+	if(dot.to.pos - dot.from.pos == 0){
 		werrstr("writeto: dot isn't a range");
 		return -1;
 	}
@@ -82,7 +394,7 @@ writeto(char *arg)
 		werrstr("writeto: %r");
 		return -1;
 	}
-	r = file ? writediskbuf(fd) : writebuf(fd);
+	r = writebuf(fd);
 	close(fd);
 	return r;
 }
@@ -107,18 +419,27 @@ cmd(char *s)
 		s += n;
 	}
 	switch(r){
-//	case 'd': return delete(s);
-//	case 'c': return cut(s);
-//	case 'p': return paste(s);
-//	case 'x': return crop(s);
+//	case '<': return pipefrom(s);
 //	case '^': return exchange(s);
 	case '|': return pipeto(s);
-//	case '<': return pipefrom(s);
-	case 'w': return writeto(s);
+//	case 'c': return copy(s);
+//	case 'd': return cut(s);
+//	case 'p': return paste(s);
 //	case 'r': return readfrom(s);
+	case 'w': return writeto(s);
+//	case 'x': return crop(s);
 	default: werrstr("unknown command %C", r); break;
 	}
 	return -1;
+}
+
+int
+loadin(int fd)
+{
+	if(readintochunks(fd) == nil)
+		sysfatal("loadin: %r");
+	setrange(0, totalsz);
+	return 0;
 }
 
 static void
