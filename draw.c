@@ -19,7 +19,8 @@ static usize views, viewe, viewmax;
 static int bgscalyl, bgscalyr, bgscalf;
 static Channel *drawc;
 static usize T;
-static uchar sbuf[Iochunksz];
+static uchar *sbuf;
+static usize sbufsz;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -45,6 +46,10 @@ drawsamps(void*)
 end:
 		recvul(drawc);
 again:
+		if(sbufsz < T){
+			sbuf = erealloc(sbuf, T, sbufsz);
+			sbufsz = T;
+		}
 		lockdisplay(display);
 		draw(viewbg, viewbg->r, display->black, nil, ZP);
 		unlockdisplay(display);

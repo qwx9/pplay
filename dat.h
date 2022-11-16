@@ -8,7 +8,7 @@ enum{
 	WriteDelay = Rate / WriteRate,	/* 1764 default delay */
 	Sampsz = 2 * 2,
 	Outsz = WriteDelay * Sampsz,
-	Iochunksz = 1*1024*1024,	/* ≈ 6 sec. at 44.1 kHz */
+	Iochunksz = 4*1024*1024,	/* ≈ 24 sec. at 44.1 kHz */
 	Ioreadsz = Iochunksz / 32,
 };
 struct Chunk{
