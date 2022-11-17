@@ -9,6 +9,7 @@ enum{
 	Csamp,
 	Cline,
 	Cloop,
+	Cchunk,
 	Ncol,
 };
 static Image *col[Ncol];
@@ -30,6 +31,31 @@ eallocimage(Rectangle r, int repl, ulong col)
 	if((i = allocimage(display, r, screen->chan, repl, col)) == nil)
 		sysfatal("allocimage: %r");
 	return i;
+}
+
+static void
+drawchunks(void)
+{
+	int x;
+	usize p, off;
+	Chunk *c;
+	Rectangle r;
+
+	c = p2c(views, &off);
+	r = view->r;
+	for(p=views-off; p<viewe; p+=c->bufsz, c=c->right){
+		if(p == 0)
+			continue;
+		x = (p - views) / T;
+		if(x > Dx(view->r))
+			break;
+		r = view->r;
+		r.min.x += x;
+		r.max.x = r.min.x + 1;
+		draw(view, r, col[Cchunk], nil, ZP);
+		if(c->bufsz == 0)
+			break;
+	}
 }
 
 static void
@@ -159,6 +185,7 @@ drawview(void)
 		r.max.x = r.min.x + 1;
 		draw(view, r, col[Cloop], nil, ZP);
 	}
+	drawchunks();
 }
 
 void
@@ -308,6 +335,7 @@ initdrw(void)
 	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x440000FF);
 	col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0x884400FF);
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
+	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0x777700FF);
 	if((drawc = chancreate(sizeof(ulong), 4)) == nil)
 		sysfatal("chancreate: %r");
 	if(proccreate(drawsamps, nil, mainstacksize) < 0)

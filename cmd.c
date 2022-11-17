@@ -64,7 +64,7 @@ unlinkchunk(Chunk *c)
 }
 
 /* stupidest possible approach for now: minimal bookkeeping */
-static Chunk *
+Chunk *
 p2c(usize p, usize *off)
 {
 	Chunk *c;

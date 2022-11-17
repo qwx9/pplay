@@ -11,6 +11,7 @@ void	redraw(int);
 void	initdrw(void);
 void	advance(Dot*, usize);
 void	jump(usize);
+Chunk*	p2c(usize, usize*);
 void	setrange(usize, usize);
 int	setpos(usize);
 uchar*	getbuf(Dot, usize, uchar*, usize*);

@@ -8,6 +8,7 @@
 #include "fns.h"
 
 int stereo, zoom = 1;
+int debug;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
@@ -76,7 +77,7 @@ prompt(Rune r)
 static void
 usage(void)
 {
-	fprint(2, "usage: %s [-cs] [pcm]\n", argv0);
+	fprint(2, "usage: %s [-Dcs] [pcm]\n", argv0);
 	threadexits("usage");
 }
 
@@ -89,6 +90,7 @@ threadmain(int argc, char **argv)
 	Rune r;
 
 	ARGBEGIN{
+	case 'D': debug = 1; break;
 	case 'c': cat = 1; break;
 	case 's': stereo = 1; break;
 	default: usage();
