@@ -274,9 +274,9 @@ paste(char *)
 	Chunk *c, *l, *dotc;
 
 	c = clonechunk();
-	if(dot.from.pos == dot.to.pos){		/* insert */
-		linkchunk(p2c(dot.to.pos, nil), c);
-		setrange(dot.to.pos, dot.to.pos + c->bufsz);
+	if(dot.from.pos == 0 && dot.to.pos == totalsz){		/* insert */
+		linkchunk(p2c(dot.pos, nil), c);
+		setrange(dot.pos, dot.pos + c->bufsz);
 		totalsz += c->bufsz;
 	}else{						/* replace */
 		dotc = p2c(dot.pos, nil);
