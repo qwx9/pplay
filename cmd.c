@@ -157,38 +157,44 @@ merge(Chunk *left, Chunk *right)
 	return 0;
 }
 
-/* does not modify dot range; merges range then splits
- * at left and right offset */
 static void
-split(void)
+splitright(Chunk *c, usize off)
 {
-	usize n, p, Δ;
-	Chunk *c, *from, *to, *tc;
+	usize Δ;
+	Chunk *nc;
 
-	from = p2c(dot.pos, &p);
-	to = p2c(dot.to.pos, nil);
-	if(from != to){
-		for(p=dot.pos; p<dot.to.pos; p+=n){
-			tc = from->right;
-			assert(tc != &norris);
-			n = tc->bufsz;
-			from = merge(from, tc);
-		}
-	}
-	if(p < dot.from.pos){
-		Δ = dot.from.pos - p;
-		c = newchunk(Δ);
-		memcpy(c->buf, from->buf, Δ);
-		linkchunk(from->left, c);
-	}
-	tc = p2c(dot.to.pos, &p);
-	p += tc->bufsz;
-	if(dot.to.pos < p){
-		Δ = p - dot.to.pos;
-		c = newchunk(Δ);
-		memcpy(c->buf, tc->buf + dot.to.pos, Δ);
-		linkchunk(from, c);
-	}
+	Δ = c->bufsz - off;
+	nc = newchunk(Δ);
+	memcpy(nc->buf, c->buf+off, Δ);
+	linkchunk(c, nc);
+	c->buf = erealloc(c->buf, off, c->bufsz);
+	c->bufsz = off;
+}
+
+static Chunk *
+mergedot(usize *off)
+{
+	usize p;
+	Chunk *c;
+
+	c = p2c(dot.from.pos, &p);
+	*off = p;
+	p = dot.from.pos - p;
+	while(p + c->bufsz < dot.to.pos)
+		merge(c, c->right);
+	return c;
+}
+
+/* before one may split oneself, one must first merge oneself */
+static void
+splitdot(void)
+{
+	usize p;
+	Chunk *c;
+
+	c = mergedot(&p);
+	splitright(c, p + dot.to.pos - dot.from.pos);
+	splitright(c, p);
 }
 
 uchar *
@@ -288,7 +294,7 @@ paste(char *)
 static int
 copy(char *)
 {
-	split();
+	splitdot();
 	holdchunk(0);
 	return 0;
 }
@@ -296,9 +302,18 @@ copy(char *)
 static int
 cut(char *)
 {
-	split();
+	splitdot();
 	totalsz -= p2c(dot.pos, nil)->bufsz;
 	holdchunk(1);
+	return 0;
+}
+
+static int
+forcemerge(char *)
+{
+	usize p;
+
+	mergedot(&p);
 	return 0;
 }
 
@@ -410,11 +425,11 @@ cmd(char *s)
 	s += chartorune(&r, s);
 	for(;;){
 		n = chartorune(&r´, s);
-		if(r´ == Runeerror || r´ == 0){
-			werrstr("truncated or malformed input");
+		if(r´ == Runeerror){
+			werrstr("malformed input");
 			return -1;
 		}
-		if(r´ != ' ' && r´ != '\t')
+		if(r´ == 0 || r´ != ' ' && r´ != '\t')
 			break;
 		s += n;
 	}
@@ -422,8 +437,9 @@ cmd(char *s)
 //	case '<': return pipefrom(s);
 //	case '^': return exchange(s);
 	case '|': return pipeto(s);
-//	case 'c': return copy(s);
-//	case 'd': return cut(s);
+	case 'c': return copy(s);
+	case 'd': return cut(s);
+	case 'm': return forcemerge(s);
 //	case 'p': return paste(s);
 //	case 'r': return readfrom(s);
 	case 'w': return writeto(s);
