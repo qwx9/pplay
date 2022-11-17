@@ -288,7 +288,7 @@ paste(char *)
 		setrange(dot.from.pos, dot.from.pos + c->bufsz);
 		totalsz += c->bufsz;
 	}
-	return 0;
+	return 1;
 }
 
 static int
@@ -305,7 +305,7 @@ cut(char *)
 	splitdot();
 	totalsz -= p2c(dot.pos, nil)->bufsz;
 	holdchunk(1);
-	return 0;
+	return 1;
 }
 
 static int
@@ -440,7 +440,7 @@ cmd(char *s)
 	case 'c': return copy(s);
 	case 'd': return cut(s);
 	case 'm': return forcemerge(s);
-//	case 'p': return paste(s);
+	case 'p': return paste(s);
 //	case 'r': return readfrom(s);
 	case 'w': return writeto(s);
 //	case 'x': return crop(s);

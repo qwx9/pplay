@@ -151,11 +151,13 @@ threadmain(int argc, char **argv)
 			default:
 				if((p = prompt(r)) == nil || strlen(p) == 0)
 					break;
-				if(cmd(p) < 0)
-					fprint(2, "cmd \"%s\" failed: %r\n", p);
-				break;
+				switch(cmd(p)){
+				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); break;
+				case 0: update(); break;
+				case 1: redraw(0); break;
+				case 2: redraw(1); break;
+				}
 			}
-			break;
 		}
 	}
 }

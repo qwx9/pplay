@@ -184,9 +184,10 @@ drawview(void)
 		r = view->r;
 		r.min.x += x;
 		r.max.x = r.min.x + 1;
-		draw(view, r, col[Cloop], nil, ZP);
+		view, r, col[Cloop], nil, ZP);
 	}
-	drawchunks();
+	if(debug)
+		drawchunks();
 }
 
 void
