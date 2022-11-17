@@ -6,6 +6,7 @@
 #include "fns.h"
 
 enum{
+	Cbg,
 	Csamp,
 	Cline,
 	Cloop,
@@ -77,7 +78,7 @@ again:
 			sbufsz = T;
 		}
 		lockdisplay(display);
-		draw(viewbg, viewbg->r, display->black, nil, ZP);
+		draw(viewbg, viewbg->r, col[Cbg], nil, ZP);
 		unlockdisplay(display);
 		d.pos = views;
 		m = viewe - views;
@@ -332,10 +333,11 @@ initdrw(void)
 		sysfatal("initdraw: %r");
 	display->locking = 1;
 	unlockdisplay(display);
+	col[Cbg] = eallocimage(Rect(0,0,1,1), 1, DBlack);
 	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x440000FF);
 	col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0x884400FF);
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
-	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0x777700FF);
+	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xBBBB00FF);
 	if((drawc = chancreate(sizeof(ulong), 4)) == nil)
 		sysfatal("chancreate: %r");
 	if(proccreate(drawsamps, nil, mainstacksize) < 0)
