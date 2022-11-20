@@ -5,6 +5,8 @@
 #include "dat.h"
 #include "fns.h"
 
+QLock synclock;
+
 enum{
 	Cbg,
 	Csamp,
@@ -84,13 +86,18 @@ again:
 		m = viewe - views;
 		x = 0;
 		while(m > 0){
-			if(nbrecvul(drawc) == 1)
+			qlock(&synclock);
+			if(nbrecvul(drawc) == 1){
+				qunlock(&synclock);
 				goto again;
+			}
 			n = m < T ? m : T;
 			if((p = getbuf(d, n, sbuf, &n)) == nil){
+				qunlock(&synclock);
 				fprint(2, "getbuf: %r\n");
 				goto end;
 			}
+				qunlock(&synclock);
 			d.pos += n;
 			e = p + n;
 			lmin = lmax = 0;
@@ -254,27 +261,24 @@ setloop(vlong off)
 }
 
 void
-setcur(usize off, int jumponly)
+setcur(usize off)
 {
 	if(off < dot.from.pos || off > dot.to.pos - Outsz)
 		return;
-	if(jumponly)
-		jump(off);
-	else
-		setpos(off);
+	jump(off);
 	update();
 }
 
 void
 setjump(usize off)
 {
-	setcur(off, 1);
+	setcur(off);
 }
 
 void
 setofs(usize ofs)
 {
-	setcur(views + ofs * T, 0);
+	setcur(views + ofs * T);
 }
 
 static void
