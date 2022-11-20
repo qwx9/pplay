@@ -15,13 +15,13 @@ static int cutheld;
 static int epfd[2];
 
 static void
-printchunks(void)
+printchunks(Chunk *r)
 {
 	Chunk *c;
 
 	fprint(2, "chunklist dot %zux %zux %zux: ", 
 		dot.from.pos, dot.pos, dot.to.pos);
-	for(c=norris.right; c!=&norris; c=c->right)
+	for(c=r->right; c!=r; c=c->right)
 		fprint(2, "%#p:%zux ", c, c->bufsz);
 	fprint(2, "\n");
 }
@@ -35,6 +35,8 @@ newchunk(usize n)
 	c = emalloc(sizeof *c);
 	c->bufsz = n;
 	c->buf = emalloc(c->bufsz);
+	c->left = c;
+	c->right = c;
 	return c;
 }
 
@@ -61,9 +63,9 @@ freechunk(Chunk *c)
 static void
 linkchunk(Chunk *left, Chunk *c)
 {
-	c->right = left->right;
+	c->left->right = left->right;
 	c->left = left;
-	c->right->left = c;
+	left->right->left = c->left;
 	left->right = c;
 }
 
@@ -282,25 +284,31 @@ advance(Dot *d, usize n)
 }
 
 static int
-paste(char *)
+replace(char *)
 {
 	Chunk *c, *l, *dotc;
 
 	c = clonechunk();
-	if(dot.from.pos == 0 && dot.to.pos == totalsz){		/* insert */
-		linkchunk(p2c(dot.pos, nil), c);
-		setrange(dot.pos, dot.pos + c->bufsz);
-		totalsz += c->bufsz;
-	}else{						/* replace */
-		dotc = p2c(dot.pos, nil);
-		l = dotc->left;
-		totalsz -= dotc->bufsz;
-		unlinkchunk(dotc);
-		freechunk(dotc);
-		linkchunk(l, c);
-		setrange(dot.from.pos, dot.from.pos + c->bufsz);
-		totalsz += c->bufsz;
-	}
+	dotc = p2c(dot.pos, nil);
+	l = dotc->left;
+	totalsz -= dotc->bufsz;
+	unlinkchunk(dotc);
+	freechunk(dotc);
+	linkchunk(l, c);
+	setrange(dot.from.pos, dot.from.pos + c->bufsz);
+	totalsz += c->bufsz;
+	return 1;
+}
+
+static int
+insert(char *)
+{
+	Chunk *c;
+
+	c = clonechunk();
+	linkchunk(p2c(dot.pos, nil), c);
+	setrange(dot.pos, dot.pos + c->bufsz);
+	totalsz += c->bufsz;
 	return 1;
 }
 
@@ -330,7 +338,6 @@ crop(char *)
 	Chunk *c, *d;
 
 	Δ = 0;
-	printchunks();
 	for(c=norris.right; c!=&norris; c=d){
 		if(Δ + c->bufsz >= dot.from.pos)
 			break;
@@ -384,11 +391,10 @@ readintochunks(int fd)
 {
 	int n;
 	usize off;
-	Chunk *c, *nc;
+	Chunk *rc, *c, *nc;
 
-	c = newchunk(Iochunksz);
-	linkchunk(&norris, c);
-	for(off=0;; off+=n){
+	rc = newchunk(Iochunksz);
+	for(off=0, c=rc;; off+=n){
 		if(off == Iochunksz){
 			totalsz += Iochunksz;
 			nc = newchunk(Iochunksz);
@@ -405,7 +411,8 @@ readintochunks(int fd)
 	c->buf = erealloc(c->buf, off, c->bufsz);
 	c->bufsz = off;
 	totalsz += c->bufsz;
-	return norris.right;
+	printchunks(rc);
+	return rc;
 }
 
 static int
@@ -435,24 +442,45 @@ writebuf(int fd)
 static void
 rc(void *s)
 {
-	close(epfd[1]);
 	dup(epfd[0], 0);
+	dup(epfd[1], 1);
 	close(epfd[0]);
+	close(epfd[1]);
 	procexecl(nil, "/bin/rc", "rc", "-c", s, nil);
 	sysfatal("procexec: %r");
 }
 
 static int
-pipeto(char *arg)
+pipeline(char *arg, int rr, int wr)
 {
 	if(pipe(epfd) < 0)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
 		sysfatal("procrfork: %r");
-	close(epfd[0]);
-	writebuf(epfd[1]);
+	if(wr)
+		writebuf(epfd[1]);
 	close(epfd[1]);
+	USED(rr);
+	close(epfd[0]);
 	return 0;
+}
+
+static int
+pipeto(char *arg)
+{
+	return pipeline(arg, 0, 1);
+}
+
+static int
+pipefrom(char *arg)
+{
+	return pipeline(arg, 1, 0);
+}
+
+static int
+pipethrough(char *arg)
+{
+	return pipeline(arg, 1, 1);
 }
 
 /* the entire string is treated as the filename, ie.
@@ -502,7 +530,7 @@ cmd(char *s)
 	case 'c': return copy(s);
 	case 'd': return cut(s);
 	case 'm': return forcemerge(s);
-	case 'p': return paste(s);
+	case 'p': return dot.from.pos == 0 && dot.to.pos == totalsz ? insert(s) : replace(s);
 //	case 'r': return readfrom(s);
 	case 'w': return writeto(s);
 	case 'x': return crop(s);
@@ -514,8 +542,12 @@ cmd(char *s)
 int
 loadin(int fd)
 {
-	if(readintochunks(fd) == nil)
+	Chunk *c;
+
+	if((c = readintochunks(fd)) == nil)
 		sysfatal("loadin: %r");
+	linkchunk(&norris, c);
+	printchunks(&norris);
 	setrange(0, totalsz);
 	return 0;
 }
