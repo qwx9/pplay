@@ -14,6 +14,18 @@ static uchar plentyofroom[Iochunksz];
 static int cutheld;
 static int epfd[2];
 
+static void
+printchunks(void)
+{
+	Chunk *c;
+
+	fprint(2, "chunklist dot %zux %zux %zux: ", 
+		dot.from.pos, dot.pos, dot.to.pos);
+	for(c=norris.right; c!=&norris; c=c->right)
+		fprint(2, "%#p:%zux ", c, c->bufsz);
+	fprint(2, "\n");
+}
+
 static Chunk *
 newchunk(usize n)
 {
@@ -186,7 +198,7 @@ mergedot(usize *off)
 }
 
 /* before one may split oneself, one must first merge oneself */
-static void
+static Chunk *
 splitdot(void)
 {
 	usize p;
@@ -195,6 +207,7 @@ splitdot(void)
 	c = mergedot(&p);
 	splitright(c, p + dot.to.pos - dot.from.pos);
 	splitright(c, p);
+	return c;
 }
 
 uchar *
@@ -302,9 +315,58 @@ copy(char *)
 static int
 cut(char *)
 {
-	splitdot();
-	totalsz -= p2c(dot.pos, nil)->bufsz;
+	Chunk *c;
+
+	c = splitdot();
+	totalsz -= c->bufsz;
 	holdchunk(1);
+	return 1;
+}
+
+static int
+crop(char *)
+{
+	usize Δ;
+	Chunk *c, *d;
+
+	Δ = 0;
+	printchunks();
+	for(c=norris.right; c!=&norris; c=d){
+		if(Δ + c->bufsz >= dot.from.pos)
+			break;
+		d = c->right;
+		Δ += c->bufsz;
+		unlinkchunk(c);
+		freechunk(c);
+	}
+	dot.from.pos -= Δ;
+	dot.to.pos -= Δ;
+	totalsz -= Δ;
+	if(dot.from.pos > 0){
+		Δ = c->bufsz - dot.from.pos;
+		memmove(c->buf, c->buf + dot.from.pos, Δ);
+		erealloc(c->buf, Δ, c->bufsz);
+		c->bufsz = Δ;
+		dot.to.pos -= dot.from.pos;
+		totalsz -= dot.from.pos;
+		dot.from.pos = 0;
+	}
+	for(Δ=0; c!=&norris; Δ+=c->bufsz, c=c->right)
+		if(Δ + c->bufsz >= dot.to.pos)
+			break;
+	if(dot.to.pos > 0){
+		totalsz -= c->bufsz - dot.to.pos;
+		erealloc(c->buf, dot.to.pos, c->bufsz);
+		c->bufsz = dot.to.pos;
+	}
+	for(c=c->right; c!=&norris; c=d){
+		d = c->right;
+		totalsz -= c->bufsz;
+		unlinkchunk(c);
+		freechunk(c);
+	}
+	dot.pos = 0;
+	dot.to.pos = totalsz;
 	return 1;
 }
 
@@ -443,7 +505,7 @@ cmd(char *s)
 	case 'p': return paste(s);
 //	case 'r': return readfrom(s);
 	case 'w': return writeto(s);
-//	case 'x': return crop(s);
+	case 'x': return crop(s);
 	default: werrstr("unknown command %C", r); break;
 	}
 	return -1;
