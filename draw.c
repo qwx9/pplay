@@ -5,7 +5,7 @@
 #include "dat.h"
 #include "fns.h"
 
-QLock synclock;
+QLock lsync;
 
 enum{
 	Cbg,
@@ -86,18 +86,18 @@ again:
 		m = viewe - views;
 		x = 0;
 		while(m > 0){
-			qlock(&synclock);
+			qlock(&lsync);
 			if(nbrecvul(drawc) == 1){
-				qunlock(&synclock);
+				qunlock(&lsync);
 				goto again;
 			}
 			n = m < T ? m : T;
-			if((p = getbuf(d, n, sbuf, &n)) == nil){
-				qunlock(&synclock);
+			p = getbuf(d, n, sbuf, &n);
+			qunlock(&lsync);
+			if(p == nil){
 				fprint(2, "getbuf: %r\n");
 				goto end;
 			}
-				qunlock(&synclock);
 			d.pos += n;
 			e = p + n;
 			lmin = lmax = 0;
