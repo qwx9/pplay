@@ -4,7 +4,6 @@ void	update(void);
 void	setzoom(int, int);
 void	setpan(int);
 void	setloop(vlong);
-void	setcur(usize, int);
 void	setofs(usize);
 void	setjump(usize);
 void	redraw(int);
