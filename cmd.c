@@ -21,8 +21,12 @@ printchunks(Chunk *r)
 
 	fprint(2, "chunklist dot %zux %zux %zux: ", 
 		dot.from.pos, dot.pos, dot.to.pos);
-	for(c=r->right; c!=r; c=c->right)
+	c = r;
+	do{
 		fprint(2, "%#p:%zux ", c, c->bufsz);
+		assert(c->right->left == c);
+		c = c->right;
+	}while(c != r);
 	fprint(2, "\n");
 }
 
@@ -64,8 +68,8 @@ static void
 linkchunk(Chunk *left, Chunk *c)
 {
 	c->left->right = left->right;
-	c->left = left;
 	left->right->left = c->left;
+	c->left = left;
 	left->right = c;
 }
 
@@ -134,17 +138,17 @@ jump(usize off)
 }
 
 static int
-holdchunk(int cut)
+holdchunk(Chunk *c, int cut)
 {
 	if(held != nil){
-		if(held == p2c(dot.pos, nil))
+		if(held == c)
 			return 0;
 		else if(cutheld){
 			unlinkchunk(held);
 			freechunk(held);
 		}
 	}
-	held = p2c(dot.from.pos, nil);
+	held = c;
 	cutheld = cut;
 	if(cut){
 		setpos(dot.from.pos);
@@ -171,18 +175,21 @@ merge(Chunk *left, Chunk *right)
 	return 0;
 }
 
-static void
-splitright(Chunk *c, usize off)
+static Chunk *
+splitright(Chunk *left, usize off)
 {
-	usize Δ;
-	Chunk *nc;
+	usize p, Δ;
+	Chunk *c;
 
-	Δ = c->bufsz - off;
-	nc = newchunk(Δ);
-	memcpy(nc->buf, c->buf+off, Δ);
-	linkchunk(c, nc);
-	c->buf = erealloc(c->buf, off, c->bufsz);
-	c->bufsz = off;
+	Δ = left->bufsz - off;
+	c = newchunk(Δ);
+	memcpy(c->buf, left->buf+off, Δ);
+	linkchunk(left, c);
+	left->buf = erealloc(left->buf, off, left->bufsz);
+	left->bufsz = off;
+	p = c2p(c);
+	setrange(p, p+Δ);
+	return c;
 }
 
 static Chunk *
@@ -208,8 +215,7 @@ splitdot(void)
 
 	c = mergedot(&p);
 	splitright(c, p + dot.to.pos - dot.from.pos);
-	splitright(c, p);
-	return c;
+	return splitright(c, p);
 }
 
 uchar *
@@ -284,11 +290,14 @@ advance(Dot *d, usize n)
 }
 
 static int
-replace(char *)
+replace(char *, Chunk *c)
 {
-	Chunk *c, *l, *dotc;
+	Chunk *l, *dotc;
 
-	c = clonechunk();
+	if(c == nil && (c = clonechunk()) == nil){
+		werrstr("replace: no buffer");
+		return -1;
+	}
 	dotc = p2c(dot.pos, nil);
 	l = dotc->left;
 	totalsz -= dotc->bufsz;
@@ -301,22 +310,38 @@ replace(char *)
 }
 
 static int
-insert(char *)
+insert(char *, Chunk *c)
 {
-	Chunk *c;
+	usize p;
+	Chunk *left;
 
-	c = clonechunk();
-	linkchunk(p2c(dot.pos, nil), c);
+	if(c == nil && (c = clonechunk()) == nil){
+		werrstr("insert: no buffer");
+		return -1;
+	}
+	left = p2c(dot.pos, &p);
+	splitright(left, p);
+	linkchunk(left, c);
 	setrange(dot.pos, dot.pos + c->bufsz);
 	totalsz += c->bufsz;
 	return 1;
 }
 
 static int
+paste(char *s, Chunk *c)
+{
+	if(dot.from.pos == 0 && dot.to.pos == totalsz)
+		return insert(s, c);
+	return replace(s, c);
+}
+
+static int
 copy(char *)
 {
-	splitdot();
-	holdchunk(0);
+	Chunk *c;
+
+	c = splitdot();
+	holdchunk(c, 0);
 	return 0;
 }
 
@@ -327,7 +352,7 @@ cut(char *)
 
 	c = splitdot();
 	totalsz -= c->bufsz;
-	holdchunk(1);
+	holdchunk(c, 1);
 	return 1;
 }
 
@@ -389,14 +414,13 @@ forcemerge(char *)
 static Chunk *
 readintochunks(int fd)
 {
-	int n;
+	int n, m;
 	usize off;
 	Chunk *rc, *c, *nc;
 
 	rc = newchunk(Iochunksz);
-	for(off=0, c=rc;; off+=n){
+	for(off=0, m=0, c=rc;; m+=n, off+=n){
 		if(off == Iochunksz){
-			totalsz += Iochunksz;
 			nc = newchunk(Iochunksz);
 			linkchunk(c, nc);
 			c = nc;
@@ -406,13 +430,32 @@ readintochunks(int fd)
 			break;
 	}
 	close(fd);
-	if(n < 0)
+	if(n < 0){
 		fprint(2, "readintochunks: %r\n");
+		if(m == 0){
+			freechunk(rc);
+			return nil;
+		}
+	}
 	c->buf = erealloc(c->buf, off, c->bufsz);
 	c->bufsz = off;
-	totalsz += c->bufsz;
-	printchunks(rc);
+	totalsz += m;
 	return rc;
+}
+
+static int
+readfrom(char *s)
+{
+	int fd;
+	Chunk *c;
+
+	if((fd = open(s, OREAD)) < 0)
+		return -1;
+	c = readintochunks(fd);
+	close(fd);
+	if(c == nil)
+		return -1;
+	return paste(nil, c);
 }
 
 static int
@@ -453,6 +496,8 @@ rc(void *s)
 static int
 pipeline(char *arg, int rr, int wr)
 {
+	Chunk *c;
+
 	if(pipe(epfd) < 0)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
@@ -460,7 +505,11 @@ pipeline(char *arg, int rr, int wr)
 	if(wr)
 		writebuf(epfd[1]);
 	close(epfd[1]);
-	USED(rr);
+	if(rr){
+		if((c = readintochunks(epfd[0])) == nil)
+			return -1;
+		paste(nil, c);
+	}
 	close(epfd[0]);
 	return 0;
 }
@@ -524,14 +573,14 @@ cmd(char *s)
 		s += n;
 	}
 	switch(r){
-//	case '<': return pipefrom(s);
-//	case '^': return exchange(s);
+	case '<': return pipefrom(s);
+	case '^': return pipethrough(s);
 	case '|': return pipeto(s);
 	case 'c': return copy(s);
 	case 'd': return cut(s);
 	case 'm': return forcemerge(s);
-	case 'p': return dot.from.pos == 0 && dot.to.pos == totalsz ? insert(s) : replace(s);
-//	case 'r': return readfrom(s);
+	case 'p': return paste(s, nil);
+	case 'r': return readfrom(s);
 	case 'w': return writeto(s);
 	case 'x': return crop(s);
 	default: werrstr("unknown command %C", r); break;
@@ -547,7 +596,6 @@ loadin(int fd)
 	if((c = readintochunks(fd)) == nil)
 		sysfatal("loadin: %r");
 	linkchunk(&norris, c);
-	printchunks(&norris);
 	setrange(0, totalsz);
 	return 0;
 }
