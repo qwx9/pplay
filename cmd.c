@@ -481,12 +481,14 @@ writebuf(int fd)
 			fprint(2, "writebuf: getbuf won't feed\n");
 			return -1;
 		}
-		if((n = write(fd, p, m)) != n){
+		if((n = write(fd, p, n)) != n){
 			fprint(2, "writebuf: short write not %zd\n", n);
 			return -1;
 		}
 		m -= n;
+		d.pos += n;
 	}
+	write(fd, plentyofroom, 0);	/* close pipe */
 	return 0;
 }
 
@@ -501,6 +503,14 @@ rc(void *s)
 	sysfatal("procexec: %r");
 }
 
+static void
+wproc(void *)
+{
+	close(epfd[0]);
+	writebuf(epfd[1]);
+	close(epfd[1]);
+}
+
 static int
 pipeline(char *arg, int rr, int wr)
 {
@@ -510,12 +520,16 @@ pipeline(char *arg, int rr, int wr)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
 		sysfatal("procrfork: %r");
-	if(wr)
-		writebuf(epfd[1]);
+	if(wr){
+		if(procrfork(wproc, nil, mainstacksize, RFFDG) < 0)
+			sysfatal("procrfork: %r");
+	}
 	close(epfd[1]);
 	if(rr){
-		if((c = readintochunks(epfd[0])) == nil)
+		if((c = readintochunks(epfd[0])) == nil){
+			close(epfd[0]);
 			return -1;
+		}
 		paste(nil, c);
 	}
 	close(epfd[0]);
