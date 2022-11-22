@@ -65,6 +65,16 @@ freechunk(Chunk *c)
 }
 
 static void
+recalcsize(void)
+{
+	Chunk *c;
+
+	totalsz = 0;
+	for(c=norris.right; c!=&norris; c=c->right)
+		totalsz += c->bufsz;
+}
+
+static void
 linkchunk(Chunk *left, Chunk *c)
 {
 	c->left->right = left->right;
@@ -117,6 +127,8 @@ setrange(usize from, usize to)
 {
 	dot.from.pos = from;
 	dot.to.pos = to;
+	if(dot.pos < from || dot.pos >= to)
+		dot.pos = from;
 }
 
 int
@@ -290,26 +302,6 @@ advance(Dot *d, usize n)
 }
 
 static int
-replace(char *, Chunk *c)
-{
-	Chunk *l, *dotc;
-
-	if(c == nil && (c = clonechunk()) == nil){
-		werrstr("replace: no buffer");
-		return -1;
-	}
-	dotc = p2c(dot.pos, nil);
-	l = dotc->left;
-	totalsz -= dotc->bufsz;
-	unlinkchunk(dotc);
-	freechunk(dotc);
-	linkchunk(l, c);
-	setrange(dot.from.pos, dot.from.pos + c->bufsz);
-	totalsz += c->bufsz;
-	return 1;
-}
-
-static int
 insert(char *, Chunk *c)
 {
 	usize p;
@@ -322,17 +314,9 @@ insert(char *, Chunk *c)
 	left = p2c(dot.pos, &p);
 	splitright(left, p);
 	linkchunk(left, c);
+	recalcsize();
 	setrange(dot.pos, dot.pos + c->bufsz);
-	totalsz += c->bufsz;
 	return 1;
-}
-
-static int
-paste(char *s, Chunk *c)
-{
-	if(dot.from.pos == 0 && dot.to.pos == totalsz)
-		return insert(s, c);
-	return replace(s, c);
 }
 
 static int
@@ -351,9 +335,37 @@ cut(char *)
 	Chunk *c;
 
 	c = splitdot();
-	totalsz -= c->bufsz;
+	recalcsize();
 	holdchunk(c, 1);
 	return 1;
+}
+
+static int
+replace(char *, Chunk *c)
+{
+	Chunk *left, *right;
+
+	if(c == nil && (c = clonechunk()) == nil){
+		werrstr("replace: no buffer");
+		return -1;
+	}
+	right = splitdot();
+	left = right->left;
+	unlinkchunk(right);
+	freechunk(right);
+	right = left->right;
+	linkchunk(left, c);
+	recalcsize();
+	setrange(dot.from.pos, right != &norris ? c2p(right) : totalsz);
+	return 1;
+}
+
+static int
+paste(char *s, Chunk *c)
+{
+	if(dot.from.pos == 0 && dot.to.pos == totalsz)
+		return insert(s, c);
+	return replace(s, c);
 }
 
 static int
@@ -373,30 +385,27 @@ crop(char *)
 	}
 	dot.from.pos -= Δ;
 	dot.to.pos -= Δ;
-	totalsz -= Δ;
 	if(dot.from.pos > 0){
 		Δ = c->bufsz - dot.from.pos;
 		memmove(c->buf, c->buf + dot.from.pos, Δ);
 		erealloc(c->buf, Δ, c->bufsz);
 		c->bufsz = Δ;
 		dot.to.pos -= dot.from.pos;
-		totalsz -= dot.from.pos;
 		dot.from.pos = 0;
 	}
 	for(Δ=0; c!=&norris; Δ+=c->bufsz, c=c->right)
 		if(Δ + c->bufsz >= dot.to.pos)
 			break;
 	if(dot.to.pos > 0){
-		totalsz -= c->bufsz - dot.to.pos;
 		erealloc(c->buf, dot.to.pos, c->bufsz);
 		c->bufsz = dot.to.pos;
 	}
 	for(c=c->right; c!=&norris; c=d){
 		d = c->right;
-		totalsz -= c->bufsz;
 		unlinkchunk(c);
 		freechunk(c);
 	}
+	recalcsize();
 	dot.pos = 0;
 	dot.to.pos = totalsz;
 	return 1;
@@ -439,7 +448,6 @@ readintochunks(int fd)
 	}
 	c->buf = erealloc(c->buf, off, c->bufsz);
 	c->bufsz = off;
-	totalsz += m;
 	return rc;
 }
 
@@ -511,7 +519,7 @@ pipeline(char *arg, int rr, int wr)
 		paste(nil, c);
 	}
 	close(epfd[0]);
-	return 0;
+	return 1;
 }
 
 static int
@@ -596,6 +604,7 @@ loadin(int fd)
 	if((c = readintochunks(fd)) == nil)
 		sysfatal("loadin: %r");
 	linkchunk(&norris, c);
+	recalcsize();
 	setrange(0, totalsz);
 	return 0;
 }
