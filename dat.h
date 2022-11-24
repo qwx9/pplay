@@ -9,7 +9,7 @@ enum{
 	Sampsz = 2 * 2,
 	Outsz = WriteDelay * Sampsz,
 	Iochunksz = 4*1024*1024,	/* ≈ 24 sec. at 44.1 kHz */
-	Ioreadsz = Iochunksz / 32,
+	Ioreadsz = 64*1024,
 };
 struct Chunk{
 	uchar *buf;

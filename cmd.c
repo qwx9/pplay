@@ -451,7 +451,10 @@ readintochunks(int fd)
 
 	rc = newchunk(Iochunksz);
 	for(off=0, m=0, c=rc;; m+=n, off+=n){
-		if(off == Iochunksz){
+		if(off + Ioreadsz > Iochunksz){
+			if(off != Iochunksz)
+				resizechunk(c, off);
+			c->bufsz = off;
 			nc = newchunk(Iochunksz);
 			linkchunk(c, nc);
 			c = nc;
