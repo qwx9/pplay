@@ -7,7 +7,7 @@
 /* stupidest implementation with the least amount of state to keep track of */
 
 Dot dot;
-usize totalsz;
+usize totalsz_, totalsz;
 static Chunk norris = {.left = &norris, .right = &norris};
 static Chunk *held;
 static uchar plentyofroom[Iochunksz];
@@ -23,7 +23,7 @@ printchunks(Chunk *r)
 		dot.from.pos, dot.pos, dot.to.pos);
 	c = r;
 	do{
-		fprint(2, "%#p:%zux ", c, c->bufsz);
+		fprint(2, "%#p:%zux:←%#p→%#p - ", c, c->bufsz, c->left, c->right);
 		assert(c->right->left == c);
 		c = c->right;
 	}while(c != r);
@@ -69,9 +69,11 @@ recalcsize(void)
 {
 	Chunk *c;
 
-	totalsz = 0;
+	totalsz_ = 0;
 	for(c=norris.right; c!=&norris; c=c->right)
-		totalsz += c->bufsz;
+		totalsz_ += c->bufsz;
+	assert(totalsz_ == totalsz);
+	assert(dot.to.pos <= totalsz);
 }
 
 static void
@@ -81,6 +83,7 @@ linkchunk(Chunk *left, Chunk *c)
 	left->right->left = c->left;
 	c->left = left;
 	left->right = c;
+	totalsz += c->bufsz;
 }
 
 static void
@@ -89,6 +92,20 @@ unlinkchunk(Chunk *c)
 	c->left->right = c->right;
 	c->right->left = c->left;
 	c->left = c->right = nil;
+	totalsz -= c->bufsz;
+}
+
+static void
+resizechunk(Chunk *c, usize newsz)
+{
+	vlong Δ;
+
+	Δ = newsz - c->bufsz;
+	c->buf = erealloc(c->buf, newsz, c->bufsz);
+	c->bufsz = newsz;
+	if(c->right == &norris && Δ < 0)
+		dot.to.pos += Δ;
+	totalsz += Δ;
 }
 
 /* stupidest possible approach for now: minimal bookkeeping */
@@ -134,19 +151,21 @@ setrange(usize from, usize to)
 int
 setpos(usize off)
 {
-	if(off < dot.from.pos || off > dot.to.pos){
-		werrstr("cannot jump outside of loop bounds\n");
-		return -1;
-	}
 	setrange(0, totalsz);
+	assert(off >= dot.from.pos && off < dot.to.pos);
 	dot.pos = off;
 	return 0;
 }
 
-void
+int
 jump(usize off)
 {
+	if(off < dot.from.pos || off > dot.to.pos){
+		werrstr("cannot jump outside of loop bounds\n");
+		return -1;
+	}
 	dot.pos = off;
+	return 0;
 }
 
 static int
@@ -155,16 +174,14 @@ holdchunk(Chunk *c, int cut)
 	if(held != nil){
 		if(held == c)
 			return 0;
-		else if(cutheld){
-			unlinkchunk(held);
+		else if(cutheld)
 			freechunk(held);
-		}
 	}
 	held = c;
 	cutheld = cut;
 	if(cut){
+		unlinkchunk(c);
 		setpos(dot.from.pos);
-		unlinkchunk(held);
 	}
 	return 0;
 }
@@ -172,16 +189,21 @@ holdchunk(Chunk *c, int cut)
 static Chunk *
 merge(Chunk *left, Chunk *right)
 {
+	usize Δ;
+
+	assert(right != &norris);
 	if(left->buf == nil || right->buf == nil){
 		werrstr("can\'t merge self into void");
 		return nil;
 	}
 	if(left->buf != right->buf){
-		left->buf = erealloc(left->buf, left->bufsz + right->bufsz, left->bufsz);
-		memmove(left->buf + left->bufsz, right->buf, right->bufsz);
-	}else
+		Δ = left->bufsz;
+		resizechunk(left, left->bufsz + right->bufsz);
+		memmove(left->buf + Δ, right->buf, right->bufsz);
+	}else{
 		right->buf = nil;
-	left->bufsz += right->bufsz;
+		left->bufsz += right->bufsz;
+	}
 	unlinkchunk(right);
 	freechunk(right);
 	return 0;
@@ -190,17 +212,16 @@ merge(Chunk *left, Chunk *right)
 static Chunk *
 splitright(Chunk *left, usize off)
 {
-	usize p, Δ;
+	usize Δ;
 	Chunk *c;
 
 	Δ = left->bufsz - off;
+	if(off == 0 || Δ == 0)
+		return left;
 	c = newchunk(Δ);
 	memcpy(c->buf, left->buf+off, Δ);
+	resizechunk(left, off);
 	linkchunk(left, c);
-	left->buf = erealloc(left->buf, off, left->bufsz);
-	left->bufsz = off;
-	p = c2p(c);
-	setrange(p, p+Δ);
 	return c;
 }
 
@@ -314,7 +335,6 @@ insert(char *, Chunk *c)
 	left = p2c(dot.pos, &p);
 	splitright(left, p);
 	linkchunk(left, c);
-	recalcsize();
 	setrange(dot.pos, dot.pos + c->bufsz);
 	return 1;
 }
@@ -334,8 +354,11 @@ cut(char *)
 {
 	Chunk *c;
 
+	if(dot.from.pos == 0 && dot.to.pos == totalsz){
+		werrstr("cut: no range selected");
+		return -1;
+	}
 	c = splitdot();
-	recalcsize();
 	holdchunk(c, 1);
 	return 1;
 }
@@ -355,7 +378,6 @@ replace(char *, Chunk *c)
 	freechunk(right);
 	right = left->right;
 	linkchunk(left, c);
-	recalcsize();
 	setrange(dot.from.pos, right != &norris ? c2p(right) : totalsz);
 	return 1;
 }
@@ -388,24 +410,20 @@ crop(char *)
 	if(dot.from.pos > 0){
 		Δ = c->bufsz - dot.from.pos;
 		memmove(c->buf, c->buf + dot.from.pos, Δ);
-		erealloc(c->buf, Δ, c->bufsz);
-		c->bufsz = Δ;
+		resizechunk(c, Δ);
 		dot.to.pos -= dot.from.pos;
 		dot.from.pos = 0;
 	}
 	for(Δ=0; c!=&norris; Δ+=c->bufsz, c=c->right)
 		if(Δ + c->bufsz >= dot.to.pos)
 			break;
-	if(dot.to.pos > 0){
-		erealloc(c->buf, dot.to.pos, c->bufsz);
-		c->bufsz = dot.to.pos;
-	}
+	if(dot.to.pos > 0)
+		resizechunk(c, dot.to.pos);
 	for(c=c->right; c!=&norris; c=d){
 		d = c->right;
 		unlinkchunk(c);
 		freechunk(c);
 	}
-	recalcsize();
 	dot.pos = 0;
 	dot.to.pos = totalsz;
 	return 1;
@@ -416,6 +434,10 @@ forcemerge(char *)
 {
 	usize p;
 
+	if(dot.from.pos == 0 && dot.to.pos == totalsz){
+		werrstr("merge: won\'t implicitely merge entire buffer\n");
+		return -1;
+	}
 	mergedot(&p);
 	return 0;
 }
@@ -446,8 +468,9 @@ readintochunks(int fd)
 			return nil;
 		}
 	}
-	c->buf = erealloc(c->buf, off, c->bufsz);
-	c->bufsz = off;
+	resizechunk(c, off);
+	if(m < Iochunksz)	/* kludge! >:( */
+		totalsz += Iochunksz - c->bufsz;
 	return rc;
 }
 
@@ -594,6 +617,7 @@ cmd(char *s)
 			break;
 		s += n;
 	}
+	recalcsize();
 	switch(r){
 	case '<': return pipefrom(s);
 	case '^': return pipethrough(s);
@@ -618,7 +642,6 @@ loadin(int fd)
 	if((c = readintochunks(fd)) == nil)
 		sysfatal("loadin: %r");
 	linkchunk(&norris, c);
-	recalcsize();
 	setrange(0, totalsz);
 	return 0;
 }
