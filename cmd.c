@@ -529,14 +529,6 @@ rc(void *s)
 	sysfatal("procexec: %r");
 }
 
-static void
-wproc(void *)
-{
-	close(epfd[0]);
-	writebuf(epfd[1]);
-	close(epfd[1]);
-}
-
 static int
 pipeline(char *arg, int rr, int wr)
 {
@@ -546,10 +538,8 @@ pipeline(char *arg, int rr, int wr)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
 		sysfatal("procrfork: %r");
-	if(wr){
-		if(procrfork(wproc, nil, mainstacksize, RFFDG) < 0)
-			sysfatal("procrfork: %r");
-	}
+	if(wr)
+		writebuf(epfd[1]);
 	close(epfd[1]);
 	if(rr){
 		if((c = readintochunks(epfd[0])) == nil){
@@ -575,9 +565,11 @@ pipefrom(char *arg)
 }
 
 static int
-pipethrough(char *arg)
+pipethrough(char *)
 {
-	return pipeline(arg, 1, 1);
+	werrstr("pipethrough disabled due to pebcak");
+	return -1;
+	//return pipeline(arg, 1, 1);
 }
 
 /* the entire string is treated as the filename, ie.
