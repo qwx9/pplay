@@ -464,8 +464,8 @@ readintochunks(int fd)
 			break;
 	}
 	close(fd);
-	if(n < 0){
-		fprint(2, "readintochunks: %r\n");
+	if(n < 0 || m == 0){
+		fprint(2, "readintochunks: nothing read\n");
 		if(m == 0){
 			freechunk(rc);
 			return nil;
