@@ -65,7 +65,7 @@ freechunk(Chunk *c)
 }
 
 static void
-recalcsize(void)
+assertsize(void)
 {
 	Chunk *c;
 
@@ -289,7 +289,8 @@ getbuf(Dot d, usize n, uchar *scratch, usize *boff)
 		bp += Δ;
 		m -= Δ;
 	}
-	*boff = n;
+	if(boff != nil)
+		*boff = n;
 	return scratch;
 }
 
@@ -445,35 +446,38 @@ forcemerge(char *)
 static Chunk *
 readintochunks(int fd)
 {
-	int n, m;
-	usize off;
+	int n;
+	usize m;
 	Chunk *rc, *c, *nc;
 
-	rc = newchunk(Iochunksz);
-	for(off=0, m=0, c=rc;; m+=n, off+=n){
-		if(off + Ioreadsz > Iochunksz){
-			if(off != Iochunksz)
-				resizechunk(c, off);
-			c->bufsz = off;
-			nc = newchunk(Iochunksz);
+	for(m=0, rc=c=nil;; m+=n){
+		nc = newchunk(Iochunksz);
+		if(rc == nil)
+			rc = nc;
+		else
 			linkchunk(c, nc);
-			c = nc;
-			off = 0;
-		}
-		if((n = read(fd, c->buf+off, Ioreadsz)) <= 0)
+		c = nc;
+		if((n = readn(fd, c->buf, Iochunksz)) < Iochunksz)
 			break;
+		yield();
 	}
 	close(fd);
-	if(n < 0 || m == 0){
-		fprint(2, "readintochunks: nothing read\n");
-		if(m == 0){
-			freechunk(rc);
+	if(n < 0)
+		fprint(2, "readintochunks: %r\n");
+	else if(n == 0){
+		if(c != rc)
+			unlinkchunk(c);
+		freechunk(c);
+		if(c == rc){
+			werrstr("readintochunks: nothing read");
 			return nil;
 		}
+	}else if(n > 0 && n < Iochunksz){
+		resizechunk(c, n);
+		/* kludge! first chunk still unlinked */
+		if(m < Iochunksz)
+			totalsz += Iochunksz - c->bufsz;
 	}
-	resizechunk(c, off);
-	if(m < Iochunksz)	/* kludge! >:( */
-		totalsz += Iochunksz - c->bufsz;
 	return rc;
 }
 
@@ -495,24 +499,29 @@ readfrom(char *s)
 static int
 writebuf(int fd)
 {
-	usize n, m;
+	int nio;
+	usize n, m, c, k;
 	uchar *p;
 	Dot d;
 
 	d.pos = d.from.pos = dot.from.pos;
 	d.to.pos = dot.to.pos;
-	for(m=d.to.pos-d.from.pos; m>0;){
-		n = sizeof plentyofroom < m ? sizeof plentyofroom : m;
-		if((p = getbuf(d, n, plentyofroom, &n)) == nil){
-			fprint(2, "writebuf: getbuf won't feed\n");
+	if((nio = iounit(fd)) == 0)
+		nio = 8192;
+	nio = MIN(nio, sizeof plentyofroom);
+	for(m=d.to.pos-d.from.pos, c=0; m>0;){
+		k = nio < m ? nio : m;
+		if((p = getbuf(d, k, plentyofroom, &k)) == nil){
+			fprint(2, "writebuf: couldn\'t get a buffer: %r\n");
 			return -1;
 		}
-		if((n = write(fd, p, n)) != n){
-			fprint(2, "writebuf: short write not %zd\n", n);
+		if((n = write(fd, p, k)) != k){
+			fprint(2, "writebuf: short write not %zd: %r\n", k);
 			return -1;
 		}
 		m -= n;
 		d.pos += n;
+		c += n;
 	}
 	write(fd, plentyofroom, 0);	/* close pipe */
 	return 0;
@@ -521,35 +530,59 @@ writebuf(int fd)
 static void
 rc(void *s)
 {
-	dup(epfd[0], 0);
-	dup(epfd[1], 1);
-	close(epfd[0]);
 	close(epfd[1]);
+	dup(epfd[0], 0);
+	dup(epfd[0], 1);
+	close(epfd[0]);
 	procexecl(nil, "/bin/rc", "rc", "-c", s, nil);
 	sysfatal("procexec: %r");
+}
+
+static void
+wproc(void *efd)
+{
+	int fd;
+
+	fd = (intptr)efd;
+	writebuf(fd);
+	close(fd);
+	threadexits(nil);
+}
+static void
+rthread(void *efd)
+{
+	int fd;
+	Chunk *c;
+
+	fd = (intptr)efd;
+	if((c = readintochunks(fd)) == nil)
+		threadexits("readintochunks: %r");
+	close(fd);
+	paste(nil, c);
+	assertsize();
+	redraw(0);
+	threadexits(nil);
 }
 
 static int
 pipeline(char *arg, int rr, int wr)
 {
-	Chunk *c;
-
+	assertsize();
 	if(pipe(epfd) < 0)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
 		sysfatal("procrfork: %r");
-	if(wr)
-		writebuf(epfd[1]);
-	close(epfd[1]);
-	if(rr){
-		if((c = readintochunks(epfd[0])) == nil){
-			close(epfd[0]);
-			return -1;
-		}
-		paste(nil, c);
-	}
 	close(epfd[0]);
-	return 1;
+	if(wr && procrfork(wproc, (int*)dup(epfd[1], -1), mainstacksize, RFFDG) < 0){
+		fprint(2, "threadcreate: %r\n");
+		return -1;
+	}
+	if(rr && threadcreate(rthread, (int*)dup(epfd[1], -1), mainstacksize) < 0){
+		fprint(2, "threadcreate: %r\n");
+		return -1;
+	}
+	close(epfd[1]);
+	return 0;
 }
 
 static int
@@ -565,11 +598,9 @@ pipefrom(char *arg)
 }
 
 static int
-pipethrough(char *)
+pipethrough(char *arg)
 {
-	werrstr("pipethrough disabled due to pebcak");
-	return -1;
-	//return pipeline(arg, 1, 1);
+	return pipeline(arg, 1, 1);
 }
 
 /* the entire string is treated as the filename, ie.
@@ -612,7 +643,7 @@ cmd(char *s)
 			break;
 		s += n;
 	}
-	recalcsize();
+	assertsize();
 	switch(r){
 	case '<': return pipefrom(s);
 	case '^': return pipethrough(s);
