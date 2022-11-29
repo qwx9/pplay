@@ -155,7 +155,7 @@ threadmain(int argc, char **argv)
 					break;
 				qlock(&lsync);
 				switch(cmd(p)){
-				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); break;
+				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); update(); break;
 				case 0: update(); break;
 				case 1: redraw(0); break;
 				case 2: redraw(1); break;
