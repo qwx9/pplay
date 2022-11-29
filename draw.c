@@ -95,7 +95,8 @@ again:
 			p = getbuf(d, n, sbuf, &n);
 			qunlock(&lsync);
 			if(p == nil){
-				fprint(2, "getbuf: %r\n");
+				if(n > 0)
+					fprint(2, "getbuf: %r\n");
 				goto end;
 			}
 			d.pos += n;
@@ -127,7 +128,7 @@ again:
 			if(stereo)
 				draw(viewbg, r, col[Csamp], nil, ZP);
 			unlockdisplay(display);
-			x++;
+			x = (d.pos - views) / T;
 		}
 	}
 }
@@ -207,8 +208,6 @@ update(void)
 	lockdisplay(display);
 	drawview();
 	x = screen->r.min.x + (p - views) / T;
-	//if(liner.min.x == x || p < views && x > liner.min.x)
-	//	return;
 	draw(screen, screen->r, view, nil, ZP);
 	liner.min.x = x;
 	liner.max.x = x + 1;
@@ -239,10 +238,20 @@ setzoom(int Δz, int pow)
 void
 setpan(int Δx)
 {
+	usize new;
+
 	Δx *= T;
-	if(zoom == 1 || views == 0 && Δx < 0 || views >= viewmax && Δx > 0)
+	if(zoom == 1)
 		return;
-	views += Δx;
+	if(Δx < 0 && -Δx > views)
+		new = 0;
+	else if(views + Δx >= viewmax)
+		new = viewmax;
+	else
+		new = views + Δx;
+	if(new == views)
+		return;
+	views = new;
 	redraw(0);
 }
 

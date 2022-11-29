@@ -114,6 +114,7 @@ p2c(usize p, usize *off)
 {
 	Chunk *c;
 
+	assert(p < totalsz);
 	c = norris.right;
 	while(p > c->bufsz){
 		p -= c->bufsz;
@@ -261,6 +262,10 @@ getbuf(Dot d, usize n, uchar *scratch, usize *boff)
 	usize Δbuf, Δloop, m, off, Δ;
 	Chunk *c;
 
+	if(d.pos >= totalsz){
+		*boff = 0;
+		return nil;
+	}
 	c = p2c(d.pos, &off);
 	p = c->buf + off;
 	m = n;
