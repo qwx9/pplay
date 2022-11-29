@@ -25,6 +25,7 @@ static Channel *drawc;
 static usize T;
 static uchar *sbuf;
 static usize sbufsz;
+static int sampwidth = 1;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -75,9 +76,9 @@ drawsamps(void*)
 end:
 		recvul(drawc);
 again:
-		if(sbufsz < T){
-			sbuf = erealloc(sbuf, T, sbufsz);
-			sbufsz = T;
+		if(sbufsz < T * sampwidth){
+			sbuf = erealloc(sbuf, T * sampwidth, sbufsz);
+			sbufsz = T * sampwidth;
 		}
 		lockdisplay(display);
 		draw(viewbg, viewbg->r, col[Cbg], nil, ZP);
@@ -91,7 +92,7 @@ again:
 				qunlock(&lsync);
 				goto again;
 			}
-			n = m < T ? m : T;
+			n = m < T * sampwidth ? m : T * sampwidth;
 			p = getbuf(d, n, sbuf, &n);
 			qunlock(&lsync);
 			if(p == nil){
@@ -116,13 +117,13 @@ again:
 					else if(s > rmax)
 						rmax = s;
 				}
-				p += 4;
+				p += 4 * sampwidth;
 			}
 			m -= n;
 			l = Rect(x, bgscalyl - lmax / bgscalf,
-				x+1, bgscalyl - lmin / bgscalf);
+				x+sampwidth, bgscalyl - lmin / bgscalf);
 			r = Rect(x, bgscalyr - rmax / bgscalf,
-				x+1, bgscalyr - rmin / bgscalf);
+				x+sampwidth, bgscalyr - rmin / bgscalf);
 			lockdisplay(display);
 			draw(viewbg, l, col[Csamp], nil, ZP);
 			if(stereo)
