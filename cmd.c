@@ -142,6 +142,8 @@ c2p(Chunk *tc)
 void
 setrange(usize from, usize to)
 {
+	assert((from & 3) == 0);
+	assert((to & 3) == 0);
 	dot.from.pos = from;
 	dot.to.pos = to;
 	if(dot.pos < from || dot.pos >= to)
@@ -151,6 +153,7 @@ setrange(usize from, usize to)
 int
 setpos(usize off)
 {
+	assert((off & 3) == 0);
 	setrange(0, totalsz);
 	assert(off >= dot.from.pos && off < dot.to.pos);
 	dot.pos = off;
@@ -556,7 +559,7 @@ rthread(void *efd)
 
 	fd = (intptr)efd;
 	if((c = readintochunks(fd)) == nil)
-		threadexits("readintochunks: %r");
+		threadexits("failed reading from pipe: %r");
 	close(fd);
 	paste(nil, c);
 	assertsize();
@@ -574,7 +577,7 @@ pipeline(char *arg, int rr, int wr)
 		sysfatal("procrfork: %r");
 	close(epfd[0]);
 	if(wr && procrfork(wproc, (int*)dup(epfd[1], -1), mainstacksize, RFFDG) < 0){
-		fprint(2, "threadcreate: %r\n");
+		fprint(2, "procrfork: %r\n");
 		return -1;
 	}
 	if(rr && threadcreate(rthread, (int*)dup(epfd[1], -1), mainstacksize) < 0){

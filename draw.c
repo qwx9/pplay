@@ -260,7 +260,7 @@ setloop(vlong off)
 	update();
 }
 
-void
+static void
 setcur(usize off)
 {
 	if(off < dot.from.pos || off > dot.to.pos - Outsz)
