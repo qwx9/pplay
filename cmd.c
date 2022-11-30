@@ -116,7 +116,7 @@ p2c(usize p, usize *off)
 
 	assert(p < totalsz);
 	c = norris.right;
-	while(p > c->bufsz){
+	while(p >= c->bufsz){
 		p -= c->bufsz;
 		c = c->right;
 	}
