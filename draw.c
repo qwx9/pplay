@@ -240,10 +240,6 @@ setzoom(int Δz, int mul)
 int
 zoominto(vlong from, vlong to)
 {
-	if(dot.from.pos == 0 && dot.to.pos == totalsz){
-		fprint(2, "not a range\n");
-		return -1;
-	}
 	if(from < 0)
 		from = 0;
 	from &= ~3;
