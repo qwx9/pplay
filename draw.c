@@ -146,6 +146,7 @@ b2t(usize ofs, int *th, int *tm, int *ts, int *tμ)
 	*th = *tm / 60;
 	*tμ = 100 * (nsamp - *ts * 44100) / 44100;
 	*ts %= 60;
+	*tm %= 60;
 }
 
 static void
