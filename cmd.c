@@ -256,6 +256,32 @@ splitdot(void)
 }
 
 uchar *
+getslice(Dot *d, usize n, usize *sz)
+{
+	usize Δbuf, Δloop, off;
+	Chunk *c;
+
+	if(d->pos >= totalsz){
+		*sz = 0;
+		return nil;
+	}
+	c = p2c(d->pos, &off);
+	Δloop = d->to.pos - d->pos;
+	Δbuf = c->bufsz - off;
+	if(n < Δloop && n < Δbuf){
+		*sz = n;
+		d->pos += n;
+	}else if(Δloop <= Δbuf){
+		*sz = Δloop;
+		d->pos = d->from.pos;
+	}else{
+		*sz = Δbuf;
+		d->pos += Δbuf;
+	}
+	return c->buf + off;
+}
+
+uchar *
 getbuf(Dot d, usize n, uchar *scratch, usize *boff)
 {
 	uchar *bp, *p;

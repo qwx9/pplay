@@ -23,8 +23,6 @@ static usize views, viewe, viewmax;
 static int bgscalyl, bgscalyr, bgscalf;
 static Channel *drawc;
 static usize T;
-static uchar *sbuf;
-static usize sbufsz;
 static int sampwidth = 1;
 static double zoom = 1.0;
 
@@ -67,7 +65,7 @@ static void
 drawsamps(void*)
 {
 	int x, lmin, lmax, rmin, rmax;
-	usize n, m;
+	usize n, m, k;
 	s16int s;
 	uchar *p, *e;
 	Rectangle l, r;
@@ -77,50 +75,49 @@ drawsamps(void*)
 end:
 		recvul(drawc);
 again:
-		if(sbufsz < T * sampwidth){
-			sbuf = erealloc(sbuf, T * sampwidth, sbufsz);
-			sbufsz = T * sampwidth;
-		}
 		lockdisplay(display);
 		draw(viewbg, viewbg->r, col[Cbg], nil, ZP);
 		unlockdisplay(display);
+		d.from.pos = 0;
 		d.pos = views;
+		d.to.pos = totalsz;
 		m = viewe - views;
 		x = 0;
+		qlock(&lsync);
 		while(m > 0){
-			qlock(&lsync);
 			if(nbrecvul(drawc) == 1){
 				qunlock(&lsync);
 				goto again;
 			}
 			n = m < T * sampwidth ? m : T * sampwidth;
-			p = getbuf(d, n, sbuf, &n);
-			qunlock(&lsync);
-			if(p == nil){
-				if(n > 0)
-					fprint(2, "getbuf: %r\n");
-				goto end;
-			}
-			d.pos += n;
-			e = p + n;
 			lmin = lmax = 0;
 			rmin = rmax = 0;
-			while(p < e){
-				s = (s16int)(p[1] << 8 | p[0]);
-				if(s < lmin)
-					lmin = s;
-				else if(s > lmax)
-					lmax = s;
-				if(stereo){
-					s = (s16int)(p[3] << 8 | p[2]);
-					if(s < rmin)
-						rmin = s;
-					else if(s > rmax)
-						rmax = s;
+			while(n > 0){
+				p = getslice(&d, n, &k);
+				if(p == nil){
+					if(k > 0)
+						fprint(2, "getslice: %r\n");
+					goto end;
 				}
-				p += 4 * sampwidth;
+				e = p + k;
+				while(p < e){
+					s = (s16int)(p[1] << 8 | p[0]);
+					if(s < lmin)
+						lmin = s;
+					else if(s > lmax)
+						lmax = s;
+					if(stereo){
+						s = (s16int)(p[3] << 8 | p[2]);
+						if(s < rmin)
+							rmin = s;
+						else if(s > rmax)
+							rmax = s;
+					}
+					p += 4 * sampwidth;
+				}
+				n -= k;
+				m -= k;
 			}
-			m -= n;
 			l = Rect(x, bgscalyl - lmax / bgscalf,
 				x+sampwidth, bgscalyl - lmin / bgscalf);
 			r = Rect(x, bgscalyr - rmax / bgscalf,
@@ -132,6 +129,7 @@ again:
 			unlockdisplay(display);
 			x = (d.pos - views) / T;
 		}
+		qunlock(&lsync);
 	}
 }
 
