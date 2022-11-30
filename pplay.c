@@ -9,7 +9,7 @@
 
 extern QLock lsync;
 
-int stereo, zoom = 1;
+int stereo;
 int debug;
 
 static Keyboardctl *kc;
@@ -140,12 +140,13 @@ threadmain(int argc, char **argv)
 			break;
 		case 2:
 			switch(r){
+			case Kdel:
+			case 'q': threadexitsall(nil);
 			case ' ': toggleplay(); break;
 			case 'b': setjump(dot.from.pos); break;
 			case Kesc: setrange(0, totalsz); update(); break;
-			case Kdel:
-			case 'q': threadexitsall(nil);
-			case 'z': setzoom(-zoom + 1, 0); break;
+			case '\n': zoominto(dot.from.pos, dot.to.pos); break;
+			case 'z': zoominto(0, totalsz); break;
 			case '-': setzoom(-1, 0); break;
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;

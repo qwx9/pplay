@@ -26,6 +26,7 @@ static usize T;
 static uchar *sbuf;
 static usize sbufsz;
 static int sampwidth = 1;
+static double zoom = 1.0;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -220,20 +221,44 @@ update(void)
 }
 
 void
-setzoom(int Δz, int pow)
+setzoom(int Δz, int mul)
 {
-	int z;
+	double z;
 
-	if(!pow)
+	if(!mul)
 		z = zoom + Δz;
 	else if(Δz < 0)
-		z = zoom >> -Δz;
+		z = zoom / pow(2, -Δz);
 	else
-		z = zoom << Δz;
-	if(z < 1 || z > (totalsz / 4) / Dx(screen->r))
+		z = zoom * pow(2, Δz);
+	if(z < 1.0 || z > (totalsz / Sampsz) / Dx(screen->r))
 		return;
 	zoom = z;
 	redraw(0);
+}
+
+int
+zoominto(vlong from, vlong to)
+{
+	if(dot.from.pos == 0 && dot.to.pos == totalsz){
+		fprint(2, "not a range\n");
+		return -1;
+	}
+	if(from < 0)
+		from = 0;
+	from &= ~3;
+	if(to >= totalsz)
+		to = totalsz;
+	to &= ~3;
+	if((to - from) / Sampsz < Dx(screen->r)){
+		werrstr("range too small");
+		return -1;
+	}
+	views = from;
+	viewe = to;
+	zoom = (double)totalsz / (to - from);
+	redraw(0);
+	return 0;
 }
 
 void
@@ -326,7 +351,7 @@ redraw(int all)
 	usize span;
 
 	lockdisplay(display);
-	T = totalsz / zoom / Dx(screen->r) & ~3;
+	T = (vlong)(totalsz / zoom / Dx(screen->r)) & ~3;
 	if(T == 0)
 		T = 4;
 	span = Dx(screen->r) * T;

@@ -28,7 +28,6 @@ extern Dot dot;
 extern usize totalsz;
 
 extern int stereo;
-extern int zoom;
 extern int debug;
 
 #define MIN(x,y)	((x) < (y) ? (x) : (y))

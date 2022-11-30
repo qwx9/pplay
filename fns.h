@@ -2,6 +2,7 @@ int	cmd(char*);
 void	initcmd(void);
 void	update(void);
 void	setzoom(int, int);
+int	zoominto(vlong, vlong);
 void	setpan(int);
 void	setloop(vlong);
 void	setofs(usize);
