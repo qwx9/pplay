@@ -660,6 +660,7 @@ cmd(char *s)
 	case 'd': return cut(s);
 	case 'm': return forcemerge(s);
 	case 'p': return paste(s, nil);
+	case 'q': threadexitsall(nil);
 	case 'r': return readfrom(s);
 	case 'w': return writeto(s);
 	case 'x': return crop(s);
