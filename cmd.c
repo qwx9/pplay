@@ -7,7 +7,7 @@
 /* stupidest implementation with the least amount of state to keep track of */
 
 Dot dot;
-usize totalsz_, totalsz;
+usize totalsz;
 static Chunk norris = {.left = &norris, .right = &norris};
 static Chunk *held;
 static uchar plentyofroom[Iochunksz];
@@ -28,6 +28,33 @@ printchunks(Chunk *r)
 		c = c->right;
 	}while(c != r);
 	fprint(2, "\n");
+}
+
+static void
+recalcsize(void)
+{
+	int n;
+	Chunk *c;
+
+	for(c=norris.right, n=0; c!=&norris; c=c->right)
+		n += c->bufsz;
+	if(dot.to.pos == totalsz || n < totalsz && dot.to.pos > n)
+		dot.to.pos = n;
+	totalsz = n;
+}
+
+#define ASSERT(x) {if(!(x)) printchunks(&norris); assert((x)); }
+static void
+paranoia(void)
+{
+	Chunk *c;
+
+	ASSERT(dot.pos >= dot.from.pos && dot.pos < dot.to.pos);
+	ASSERT(dot.to.pos <= totalsz);
+	for(c=norris.right; c!=&norris; c=c->right){
+		ASSERT(c->buf != nil);
+		ASSERT((c->bufsz & 3) == 0 && c->bufsz >= Sampsz);
+	}
 }
 
 static Chunk *
@@ -65,25 +92,12 @@ freechunk(Chunk *c)
 }
 
 static void
-assertsize(void)
-{
-	Chunk *c;
-
-	totalsz_ = 0;
-	for(c=norris.right; c!=&norris; c=c->right)
-		totalsz_ += c->bufsz;
-	assert(totalsz_ == totalsz);
-	assert(dot.to.pos <= totalsz);
-}
-
-static void
 linkchunk(Chunk *left, Chunk *c)
 {
 	c->left->right = left->right;
 	left->right->left = c->left;
 	c->left = left;
 	left->right = c;
-	totalsz += c->bufsz;
 }
 
 static void
@@ -92,7 +106,6 @@ unlinkchunk(Chunk *c)
 	c->left->right = c->right;
 	c->right->left = c->left;
 	c->left = c->right = nil;
-	totalsz -= c->bufsz;
 }
 
 static void
@@ -105,7 +118,6 @@ resizechunk(Chunk *c, usize newsz)
 	c->bufsz = newsz;
 	if(c->right == &norris && Δ < 0)
 		dot.to.pos += Δ;
-	totalsz += Δ;
 }
 
 /* stupidest possible approach for now: minimal bookkeeping */
@@ -262,6 +274,7 @@ getslice(Dot *d, usize n, usize *sz)
 	Chunk *c;
 
 	if(d->pos >= totalsz){
+		werrstr("out of bounds");
 		*sz = 0;
 		return nil;
 	}
@@ -506,12 +519,8 @@ readintochunks(int fd)
 			werrstr("readintochunks: nothing read");
 			return nil;
 		}
-	}else if(n > 0 && n < Iochunksz){
+	}else if(n > 0 && n < Iochunksz)
 		resizechunk(c, n);
-		/* kludge! first chunk still unlinked */
-		if(m < Iochunksz)
-			totalsz += Iochunksz - c->bufsz;
-	}
 	return rc;
 }
 
@@ -593,7 +602,7 @@ rthread(void *efd)
 		threadexits("failed reading from pipe: %r");
 	close(fd);
 	paste(nil, c);
-	assertsize();
+	recalcsize();
 	redraw(0);
 	threadexits(nil);
 }
@@ -601,7 +610,6 @@ rthread(void *efd)
 static int
 pipeline(char *arg, int rr, int wr)
 {
-	assertsize();
 	if(pipe(epfd) < 0)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
@@ -661,7 +669,7 @@ writeto(char *arg)
 int
 cmd(char *s)
 {
-	int n;
+	int n, x;
 	Rune r, r´;
 
 	/* FIXME: avoid potential conflicts with keys in main() */
@@ -677,22 +685,24 @@ cmd(char *s)
 			break;
 		s += n;
 	}
-	assertsize();
 	switch(r){
-	case '<': return pipefrom(s);
-	case '^': return pipethrough(s);
-	case '|': return pipeto(s);
-	case 'c': return copy(s);
-	case 'd': return cut(s);
-	case 'm': return forcemerge(s);
-	case 'p': return paste(s, nil);
+	case '<': x = pipefrom(s); break;
+	case '^': x = pipethrough(s); break;
+	case '|': x = pipeto(s); break;
+	case 'c': x = copy(s); break;
+	case 'd': x = cut(s); break;
+	case 'm': x = forcemerge(s); break;
+	case 'p': x = paste(s, nil); break;
 	case 'q': threadexitsall(nil);
-	case 'r': return readfrom(s);
-	case 'w': return writeto(s);
-	case 'x': return crop(s);
-	default: werrstr("unknown command %C", r); break;
+	case 'r': x = readfrom(s); break;
+	case 'w': x = writeto(s); break;
+	case 'x': x = crop(s); break;
+	default: werrstr("unknown command %C", r); x = -1; break;
 	}
-	return -1;
+	if(debug)
+		paranoia();
+	recalcsize();
+	return x;
 }
 
 int
@@ -703,6 +713,7 @@ loadin(int fd)
 	if((c = readintochunks(fd)) == nil)
 		sysfatal("loadin: %r");
 	linkchunk(&norris, c);
+	recalcsize();
 	setrange(0, totalsz);
 	return 0;
 }
