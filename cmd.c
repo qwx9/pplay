@@ -462,8 +462,8 @@ crop(char *)
 		dot.to.pos -= dot.from.pos;
 		dot.from.pos = 0;
 	}
-	for(Δ=0; c!=&norris; Δ+=c->bufsz, c=c->right)
-		if(Δ + c->bufsz >= dot.to.pos)
+	for(; c!=&norris; dot.to.pos-=c->bufsz, c=c->right)
+		if(c->bufsz >= dot.to.pos)
 			break;
 	if(dot.to.pos > 0)
 		resizechunk(c, dot.to.pos);
