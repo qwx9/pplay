@@ -22,19 +22,18 @@ static void
 athread(void *)
 {
 	int nerr;
-	uchar *p;
-	usize n;
+	vlong n;
 
 	nerr = 0;
 	for(;;){
 		if(afd < 0 || nerr > 10)
 			return;
-		if((p = getbuf(dot, Outsz, sbuf, &n)) == nil){
+		if((n = getbuf(dot, Outsz, sbuf, sizeof sbuf)) < 0){
 			fprint(2, "athread: %r\n");
 			nerr++;
 			continue;
 		}
-		if(write(afd, p, n) != n){
+		if(write(afd, sbuf, n) != n){
 			fprint(2, "athread write: %r (nerr %d)\n", nerr);
 			break;
 		}

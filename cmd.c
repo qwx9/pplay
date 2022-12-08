@@ -4,8 +4,6 @@
 #include "dat.h"
 #include "fns.h"
 
-/* stupidest implementation with the least amount of state to keep track of */
-
 Dot dot;
 usize totalsz;
 static Chunk norris = {.left = &norris, .right = &norris};
@@ -120,7 +118,6 @@ resizechunk(Chunk *c, usize newsz)
 		dot.to.pos += Δ;
 }
 
-/* stupidest possible approach for now: minimal bookkeeping */
 Chunk *
 p2c(usize p, usize *off)
 {
@@ -294,51 +291,23 @@ getslice(Dot *d, usize n, usize *sz)
 	return c->buf + off;
 }
 
-uchar *
-getbuf(Dot d, usize n, uchar *scratch, usize *boff)
+vlong
+getbuf(Dot d, usize n, uchar *buf, usize bufsz)
 {
-	uchar *bp, *p;
-	usize Δbuf, Δloop, m, off, Δ;
-	Chunk *c;
+	uchar *p, *b;
+	usize sz;
 
-	if(d.pos >= totalsz){
-		*boff = 0;
-		return nil;
+	assert(d.pos < totalsz);
+	assert(n <= bufsz);
+	b = buf;
+	while(n > 0){
+		if((p = getslice(&d, n, &sz)) == nil || sz < Sampsz)
+			return -1;
+		memcpy(b, p, sz);
+		b += sz;
+		n -= sz;
 	}
-	c = p2c(d.pos, &off);
-	p = c->buf + off;
-	m = n;
-	bp = scratch;
-	while(m > 0){
-		Δloop = d.to.pos - d.pos;
-		Δbuf = c->bufsz - off;
-		if(m < Δloop && m < Δbuf){
-			Δ = m;
-			memcpy(bp, p, Δ);
-			d.pos += Δ;
-		}else if(Δloop <= Δbuf){
-			Δ = Δloop;
-			memcpy(bp, p, Δ);
-			d.pos = d.from.pos;
-			c = p2c(d.from.pos, nil);
-			off = 0;
-			p = c->buf;
-		}else{
-			if(c == &norris)
-				c = c->right;
-			Δ = Δbuf;
-			memcpy(bp, p, Δ);
-			d.pos += Δ;
-			c = c->right;
-			off = 0; 
-			p = c->buf;
-		}
-		bp += Δ;
-		m -= Δ;
-	}
-	if(boff != nil)
-		*boff = n;
-	return scratch;
+	return b - buf;
 }
 
 void
@@ -542,6 +511,8 @@ readfrom(char *s)
 static int
 writebuf(int fd)
 {
+	static uchar *buf;
+	static usize bufsz;
 	int nio;
 	usize n, m, c, k;
 	uchar *p;
@@ -551,14 +522,17 @@ writebuf(int fd)
 	d.to.pos = dot.to.pos;
 	if((nio = iounit(fd)) == 0)
 		nio = 8192;
-	nio = MIN(nio, sizeof plentyofroom);
+	if(bufsz < nio){
+		buf = erealloc(buf, nio, bufsz);
+		bufsz = nio;
+	}
 	for(m=d.to.pos-d.from.pos, c=0; m>0;){
 		k = nio < m ? nio : m;
-		if((p = getbuf(d, k, plentyofroom, &k)) == nil){
-			fprint(2, "writebuf: couldn\'t get a buffer: %r\n");
+		if(getbuf(d, k, buf, bufsz) < 0){
+			fprint(2, "writebuf: couldn\'t snarf: %r\n");
 			return -1;
 		}
-		if((n = write(fd, p, k)) != k){
+		if((n = write(fd, buf, k)) != k){
 			fprint(2, "writebuf: short write not %zd: %r\n", k);
 			return -1;
 		}
@@ -566,7 +540,7 @@ writebuf(int fd)
 		d.pos += n;
 		c += n;
 	}
-	write(fd, plentyofroom, 0);	/* close pipe */
+	write(fd, buf, 0);	/* close pipe */
 	return 0;
 }
 

@@ -15,7 +15,7 @@ Chunk*	p2c(usize, usize*);
 void	setrange(usize, usize);
 int	setpos(usize);
 uchar*	getslice(Dot*, usize, usize*);
-uchar*	getbuf(Dot, usize, uchar*, usize*);
+vlong	getbuf(Dot, usize, uchar*, usize);
 int	loadin(int);
 void*	emalloc(usize);
 void*	erealloc(void*, usize, usize);
