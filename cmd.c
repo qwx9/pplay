@@ -43,15 +43,20 @@ recalcsize(void)
 
 #define ASSERT(x) {if(!(x)) printchunks(&norris); assert((x)); }
 static void
-paranoia(void)
+paranoia(int exact)
 {
+	usize n;
 	Chunk *c;
 
 	ASSERT(dot.pos >= dot.from.pos && dot.pos < dot.to.pos);
-	ASSERT(dot.to.pos <= totalsz);
-	for(c=norris.right; c!=&norris; c=c->right){
+	for(c=norris.right, n=0; c!=&norris; c=c->right){
 		ASSERT(c->buf != nil);
 		ASSERT((c->bufsz & 3) == 0 && c->bufsz >= Sampsz);
+		n += c->bufsz;
+	}
+	if(exact){
+		ASSERT(n <= totalsz);
+		ASSERT(dot.to.pos <= totalsz);
 	}
 }
 
@@ -644,6 +649,8 @@ cmd(char *s)
 			break;
 		s += n;
 	}
+	if(debug)
+		paranoia(1);
 	switch(r){
 	case '<': x = pipefrom(s); break;
 	case '^': x = pipethrough(s); break;
@@ -659,7 +666,7 @@ cmd(char *s)
 	default: werrstr("unknown command %C", r); x = -1; break;
 	}
 	if(debug)
-		paranoia();
+		paranoia(0);
 	recalcsize();
 	return x;
 }
