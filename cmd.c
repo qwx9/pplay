@@ -310,33 +310,19 @@ getbuf(Dot d, usize n, uchar *buf, usize bufsz)
 	return b - buf;
 }
 
-void
+int
 advance(Dot *d, usize n)
 {
-	usize Δ, Δbuf, Δloop, m, off;
-	Chunk *c;
+	usize m, sz;
 
-	c = p2c(d->pos, &off);
-	m = n;
-	while(m > 0){
-		Δloop = d->to.pos - d->pos;
-		Δbuf = c->bufsz - off;
-		if(m < Δloop && m < Δbuf){
-			d->pos += m;
-			break;
-		}else if(Δloop < Δbuf){
-			Δ = Δloop;
-			d->pos = d->from.pos;
-			c = p2c(d->from.pos, nil);
-			off = 0;
-		}else{
-			Δ = Δbuf;
-			d->pos += Δ;
-			c = c->right;
-			off = 0;
-		}
-		m -= Δ;
+	m = 0;
+	while(n > 0){
+		if(getslice(d, n, &sz) == nil)
+			return -1;
+		m += sz;
+		n -= sz;
 	}
+	return m;
 }
 
 static int
@@ -515,7 +501,6 @@ writebuf(int fd)
 	static usize bufsz;
 	int nio;
 	usize n, m, c, k;
-	uchar *p;
 	Dot d;
 
 	d.pos = d.from.pos = dot.from.pos;

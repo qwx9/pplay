@@ -9,7 +9,7 @@ void	setofs(usize);
 void	setjump(usize);
 void	redraw(int);
 void	initdrw(void);
-void	advance(Dot*, usize);
+int	advance(Dot*, usize);
 int	jump(usize);
 Chunk*	p2c(usize, usize*);
 void	setrange(usize, usize);
