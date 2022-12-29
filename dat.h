@@ -1,6 +1,7 @@
 typedef struct Chunk Chunk;
 typedef struct Pos Pos;
 typedef struct Dot Dot;
+typedef struct Buf Buf;
 
 enum{
 	Rate = 44100,
@@ -10,9 +11,11 @@ enum{
 	Outsz = WriteDelay * Sampsz,
 	Iochunksz = 4*1024*1024,	/* ≈ 24 sec. at 44.1 kHz */
 };
+#pragma incomplete Buf
 struct Chunk{
-	uchar *buf;
-	usize bufsz;
+	Buf *b;
+	usize off;
+	usize len;
 	Chunk *left;
 	Chunk *right;
 };
@@ -26,9 +29,11 @@ extern struct Dot{
 };
 extern Dot dot;
 extern usize totalsz;
+extern int treadsoftly;
 
 extern int stereo;
 extern int debug;
+extern int debugdraw;
 
 #define MIN(x,y)	((x) < (y) ? (x) : (y))
 #define MAX(x,y)	((x) > (y) ? (x) : (y))

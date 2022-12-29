@@ -6,6 +6,7 @@
 #include "fns.h"
 
 QLock lsync;
+int debugdraw;
 
 enum{
 	Cbg,
@@ -46,7 +47,7 @@ drawchunks(void)
 
 	c = p2c(views, &off);
 	r = view->r;
-	for(p=views-off; p<viewe; p+=c->bufsz, c=c->right){
+	for(p=views-off; p<viewe; p+=c->len, c=c->right){
 		if(p == 0)
 			continue;
 		x = (p - views) / T;
@@ -56,7 +57,7 @@ drawchunks(void)
 		r.min.x += x;
 		r.max.x = r.min.x + 1;
 		draw(view, r, col[Cchunk], nil, ZP);
-		if(c->bufsz == 0)
+		if(c->len == 0)
 			break;
 	}
 }
@@ -195,7 +196,7 @@ drawview(void)
 		r.max.x = r.min.x + 1;
 		draw(view, r, col[Cloop], nil, ZP);
 	}
-	if(debug)
+	if(debugdraw)
 		drawchunks();
 }
 

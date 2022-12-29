@@ -91,7 +91,7 @@ threadmain(int argc, char **argv)
 	Rune r;
 
 	ARGBEGIN{
-	case 'D': debug = 1; break;
+	case 'D': debug = 1; debugdraw = 1; break;
 	case 'c': cat = 1; break;
 	case 's': stereo = 1; break;
 	default: usage();
@@ -141,6 +141,7 @@ threadmain(int argc, char **argv)
 			switch(r){
 			case Kdel:
 			case 'q': threadexitsall(nil);
+			case 'D': debugdraw ^= 1; break;
 			case ' ': toggleplay(); break;
 			case 'b': setjump(dot.from.pos); break;
 			case Kesc: setrange(0, totalsz); update(); break;
@@ -151,6 +152,10 @@ threadmain(int argc, char **argv)
 			case '_': setzoom(-1, 1); break;
 			case '+': setzoom(1, 1); break;
 			default:
+				if(treadsoftly){
+					fprint(2, "dropping edit event during ongoing read\n");
+					break;
+				}
 				if((p = prompt(r)) == nil || strlen(p) == 0)
 					break;
 				qlock(&lsync);
