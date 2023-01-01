@@ -1,4 +1,7 @@
+void	fixroot(Chunk*, usize);
+void	dprint(Chunk*, char*, ...);
 void	freechain(Chunk*);
+usize	chunklen(Chunk*);
 void	recalcsize(void);
 void	paranoia(int);
 void	setdot(Dot*, Chunk*);
@@ -30,7 +33,13 @@ int	setpos(usize);
 uchar*	getslice(Dot*, usize, usize*);
 vlong	getbuf(Dot, usize, uchar*, usize);
 int	loadin(int);
+int	χfmt(Fmt*);
+int	Δfmt(Fmt*);
 void*	emalloc(usize);
 void*	erealloc(void*, usize, usize);
 char*	estrdup(char*);
 int	setpri(int);
+
+#pragma	varargck	argpos	dprint	2
+#pragma	varargck	type	"χ"	Chunk*
+#pragma	varargck	type	"Δ"	Dot*

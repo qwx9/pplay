@@ -79,9 +79,9 @@ again:
 		lockdisplay(display);
 		draw(viewbg, viewbg->r, col[Cbg], nil, ZP);
 		unlockdisplay(display);
-		d.from.pos = 0;
+		d.from = 0;
 		d.pos = views;
-		d.to.pos = totalsz;
+		d.to = totalsz;
 		m = viewe - views;
 		x = 0;
 		qlock(&lsync);
@@ -157,16 +157,16 @@ drawstat(void)
 	b2t(dot.pos, &th, &tm, &ts, &tμ);
 	p = seprint(s, s+sizeof s, "T %zd @ %02d:%02d:%02d.%03d (%zd) ⋅ ",
 		T/4, th, tm, ts, tμ, dot.pos/4);
-	if(dot.from.pos > 0){
-		b2t(dot.from.pos, &th, &tm, &ts, &tμ);
+	if(dot.from > 0){
+		b2t(dot.from, &th, &tm, &ts, &tμ);
 		p = seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%zd) ↺ ",
-			th, tm, ts, tμ, dot.from.pos/4);
+			th, tm, ts, tμ, dot.from/4);
 	}else
 		p = seprint(p, s+sizeof s, "0 ↺ ");
-	if(dot.to.pos != totalsz){
-		b2t(dot.to.pos, &th, &tm, &ts, &tμ);
+	if(dot.to != totalsz){
+		b2t(dot.to, &th, &tm, &ts, &tμ);
 		seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%zd)",
-			th, tm, ts, tμ, dot.to.pos/4);
+			th, tm, ts, tμ, dot.to/4);
 	}else
 		seprint(p, s+sizeof s, "∞");
 	string(screen, statp, col[Cline], ZP, font, s);
@@ -179,7 +179,7 @@ drawview(void)
 	usize left, right;
 	Rectangle r;
 
-	left = dot.from.pos;
+	left = dot.from;
 	draw(view, view->r, viewbg, nil, ZP);
 	if(left != 0 && left >= views){
 		x = (left - views) / T;
@@ -188,7 +188,7 @@ drawview(void)
 		r.max.x = r.min.x + 1;
 		draw(view, r, col[Cloop], nil, ZP);
 	}
-	right = dot.to.pos;
+	right = dot.to;
 	if(right != totalsz){
 		x = (right - views) / T;
 		r = view->r;
@@ -285,16 +285,16 @@ setloop(vlong off)
 	if(off < 0 || off > totalsz)
 		return;
 	if(off < dot.pos)
-		setrange(off, dot.to.pos);
+		setrange(off, dot.to);
 	else
-		setrange(dot.from.pos, off);
+		setrange(dot.from, off);
 	update();
 }
 
 static void
 setcur(usize off)
 {
-	if(off < dot.from.pos || off > dot.to.pos - Outsz)
+	if(off < dot.from || off > dot.to - Outsz)
 		return;
 	jump(off);
 	update();

@@ -98,6 +98,8 @@ threadmain(int argc, char **argv)
 	}ARGEND
 	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
 		sysfatal("open: %r");
+	fmtinstall(L'Δ', Δfmt);
+	fmtinstall(L'χ', χfmt);
 	if(loadin(fd) < 0)
 		sysfatal("inittrack: %r");
 	close(fd);
@@ -141,11 +143,11 @@ threadmain(int argc, char **argv)
 			switch(r){
 			case Kdel:
 			case 'q': threadexitsall(nil);
-			case 'D': debugdraw ^= 1; break;
+			case 'D': debug ^= 1; debugdraw ^= 1; break;
 			case ' ': toggleplay(); break;
-			case 'b': setjump(dot.from.pos); break;
+			case 'b': setjump(dot.from); break;
 			case Kesc: setrange(0, totalsz); update(); break;
-			case '\n': zoominto(dot.from.pos, dot.to.pos); break;
+			case '\n': zoominto(dot.from, dot.to); break;
 			case 'z': zoominto(0, totalsz); break;
 			case '-': setzoom(-1, 0); break;
 			case '=': setzoom(1, 0); break;

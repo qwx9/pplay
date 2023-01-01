@@ -12,41 +12,92 @@ int treadsoftly;
 // FIXME: crazy idea, multisnarf with addressable elements; $n registers; fork pplay to display them → ?
 
 enum{
-	Nhold = 64,
+	OPins,
+	OPdel,
+	OPcrop,
+
+	Nops = 128,
 };
-static Chunk *hold[Nhold], *snarf;
 static int epfd[2];
+
+typedef struct Op Op;
+struct Op{
+	int type;
+	usize from;
+	usize to;
+	Chunk *c;
+};
+static int ohead, otail;
+static Chunk *hold;
+static Op ops[Nops];
 
 void
 setrange(usize from, usize to)
 {
 	assert((from & 3) == 0);
 	assert((to & 3) == 0);
-	dot.from.pos = from;
-	dot.to.pos = to;
+	dot.from = from;
+	dot.to = to;
 	if(dot.pos < from || dot.pos >= to)
 		dot.pos = from;
 }
 
 int
-setpos(usize off)
-{
-	assert((off & 3) == 0);
-	setrange(0, totalsz);
-	assert(off >= dot.from.pos && off < dot.to.pos);
-	dot.pos = off;
-	return 0;
-}
-
-int
 jump(usize off)
 {
-	if(off < dot.from.pos || off > dot.to.pos){
+	if(off < dot.from || off > dot.to){
 		werrstr("cannot jump outside of loop bounds\n");
 		return -1;
 	}
 	dot.pos = off;
 	return 0;
+}
+
+// FIXME: needs a different way of managing ops
+int
+unpop(char *)
+{
+	return 0;
+}
+
+int
+popop(char *)	// FIXME: u[n]
+{
+	Op *op;
+
+	if(otail == ohead)
+		return 0;
+	ohead = ohead - 1 & nelem(ops) - 1;
+	op = ops + ohead;
+	dprint(op->c, "cmd/pop dot=%Δ type=%d from=%08zux to=%08zux c=%#p\n",
+		&dot, op->type, op->from, op->to, op->c);
+	switch(op->type){
+	case OPdel:
+		if(insertat(op->from, op->c) == nil)
+			return -1;
+		break;
+	case OPins:
+		if(cutrange(op->from, op->to, nil) == nil)
+			return -1;
+		break;
+	case OPcrop:
+		if(insertat(op->to - op->from, op->c) == nil)
+			return -1;
+		dprint(nil, "uncropped with loose root\n");
+		fixroot(op->c, op->from + (op->to - op->from));
+		break;
+	default: werrstr("phase error: unknown op %d\n", op->type); return -1;
+	}
+	memset(ops+ohead, 0, sizeof *ops);
+	return 1;
+}
+
+void
+pushop(int type, usize from, usize to, Chunk *c)
+{
+	freechain(ops[ohead].c);
+	ops[ohead] = (Op){type, from, to, c};
+	ohead = ohead + 1 & nelem(ops) - 1;
 }
 
 static int
@@ -58,10 +109,12 @@ replace(char *, Chunk *c)
 		fprint(2, "replace: nothing to paste\n");
 		return -1;
 	}
-	if((left = inserton(dot.from.pos, dot.to.pos, c, &latch)) == nil){
+	if((left = inserton(dot.from, dot.to, c, &latch)) == nil){
 		fprint(2, "insert: %r\n");
 		return -1;
 	}
+	pushop(OPdel, dot.from, dot.to, latch);
+	pushop(OPins, dot.from, dot.to, nil);
 	setdot(&dot, nil);
 	dot.pos = c2p(left->right);
 	return 1;
@@ -76,38 +129,50 @@ insert(char *, Chunk *c)
 		fprint(2, "insert: nothing to paste\n");
 		return -1;
 	}
+	dprint(nil, "cmd/insert %Δ\n", &dot);
+	dprint(c, "buffered\n");
+	pushop(OPins, dot.pos, dot.pos+chunklen(c)-1, nil);
 	if((left = insertat(dot.pos, c)) == nil){
 		fprint(2, "insert: %r\n");
 		return -1;
 	}
 	setdot(&dot, nil);
 	dot.pos = c2p(left->right);
+	dprint(nil, "end\n");
 	return 1;
 }
 
 static int
 paste(char *s, Chunk *c)
 {
-	if(c == nil && (c = snarf) == nil){
+	if(c == nil && (c = hold) == nil){
 		werrstr("paste: no buffer");
 		return -1;
 	}
 	c = replicate(c, c->left);
-	if(dot.from.pos == 0 && dot.to.pos == totalsz)
+	if(dot.from == 0 && dot.to == totalsz)
 		return insert(s, c);
 	else
 		return replace(s, c);
 }
 
+static void
+snarf(Chunk *c)
+{
+	dprint(hold, "snarf was:\n");
+	freechain(hold);
+	hold = c;
+	dprint(hold, "snarf now:\n");
+}
+
 static int
 copy(char *)
 {
-	Chunk *c, *left, *right;
+	Chunk *left, *right;
 
-	splitrange(dot.from.pos, dot.to.pos, &left, &right);
-	c = replicate(left, right);
-	freechain(snarf);
-	snarf = c;
+	dprint(hold, "cmd/copy %Δ\n", &dot);
+	splitrange(dot.from, dot.to, &left, &right);
+	snarf(replicate(left, right));
 	return 0;
 }
 
@@ -116,11 +181,15 @@ cut(char *)
 {
 	Chunk *latch;
 
-	if(dot.from.pos == 0 && dot.to.pos == totalsz){
+	if(dot.from == 0 && dot.to == totalsz){
 		werrstr("cut: no range selected");
 		return -1;
 	}
-	cutrange(dot.from.pos, dot.to.pos, &latch);
+	dprint(nil, "cmd/cut %Δ\n", &dot);
+	cutrange(dot.from, dot.to, &latch);
+	dprint(latch, "latched\n");
+	snarf(replicate(latch, latch->left));
+	pushop(OPdel, dot.from, dot.from+chunklen(latch)-1, latch);
 	setdot(&dot, nil);
 	return 1;
 }
@@ -130,8 +199,11 @@ crop(char *)
 {
 	Chunk *latch;
 
-	if(croprange(dot.from.pos, dot.to.pos, &latch) == nil)
+	dprint(nil, "cmd/crop %Δ\n", &dot);
+	if(croprange(dot.from, dot.to, &latch) == nil)
 		return -1;
+	dprint(latch, "latched\n");
+	pushop(OPcrop, dot.from, dot.to, latch);
 	setdot(&dot, nil);
 	dot.pos = 0;
 	return 1;
@@ -165,15 +237,15 @@ writebuf(int fd)
 	usize n, m, c, k;
 	Dot d;
 
-	d.pos = d.from.pos = dot.from.pos;
-	d.to.pos = dot.to.pos;
+	d.pos = d.from = dot.from;
+	d.to = dot.to;
 	if((nio = iounit(fd)) == 0)
 		nio = 8192;
 	if(bufsz < nio){
 		buf = erealloc(buf, nio, bufsz);
 		bufsz = nio;
 	}
-	for(m=d.to.pos-d.from.pos, c=0; m>0;){
+	for(m=d.to-d.from, c=0; m>0;){
 		k = nio < m ? nio : m;
 		if(getbuf(d, k, buf, bufsz) < 0){
 			fprint(2, "writebuf: couldn\'t snarf: %r\n");
@@ -243,8 +315,9 @@ rthread(void *efd)
 		threadexits("failed reading from pipe: %r");
 	close(fd);
 	dot = d;
+	pushop(OPins, dot.from, dot.from+chunklen(c)-1, nil);
 	paste(nil, c);
-	dot.pos = dot.from.pos;
+	dot.pos = dot.from;
 	setdot(&dot, nil);
 	recalcsize();
 	redraw(0);
@@ -312,7 +385,7 @@ writeto(char *arg)
 {
 	int r, fd;
 
-	if(dot.to.pos - dot.from.pos == 0){
+	if(dot.to - dot.from == 0){
 		werrstr("writeto: dot isn't a range");
 		return -1;
 	}
@@ -356,6 +429,8 @@ cmd(char *s)
 	case 'p': x = paste(s, nil); break;
 	case 'q': threadexitsall(nil);
 	case 'r': x = readfrom(s); break;
+//	case 'U': x = unpop(s); break;
+	case 'u': x = popop(s); break;
 	case 'w': x = writeto(s); break;
 	case 'x': x = crop(s); break;
 	default: werrstr("unknown command %C", r); x = -1; break;

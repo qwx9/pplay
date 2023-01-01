@@ -12,20 +12,59 @@ struct Buf{
 };
 static Chunk *norris;
 
-static void
-printchunks(Chunk *r)
+int
+Δfmt(Fmt *fmt)
+{
+	Dot *d;
+
+	d = va_arg(fmt->args, Dot*);
+	if(d == nil)
+		return fmtstrcpy(fmt, "[??:??:??]");
+	return fmtprint(fmt, "[from=%08zux cur=%08zux to=%08zux]",
+		d->from, d->pos, d->to);
+}
+
+int
+χfmt(Fmt *fmt)
 {
 	Chunk *c;
 
-	fprint(2, "chunklist dot %zux %zux %zux: ", 
-		dot.from.pos, dot.pos, dot.to.pos);
+	c = va_arg(fmt->args, Chunk*);
+	if(c == nil)
+		return fmtstrcpy(fmt, "[]");
+	return fmtprint(fmt, "0x%08p:%08zux::0x%08p:0x%08p", c, c->len, c->left, c->right);
+}
+
+static void
+printchunks(Chunk *r)
+{
+	usize len;
+	Chunk *c;
+
 	c = r;
+	len = 0;
 	do{
-		fprint(2, "[%#p:%zd:←%#p→%#p] ", c, c->len, c->left, c->right);
+		fprint(2, "\t%χ\toff=%08zux\n", c, len);
 		assert(c->right->left == c);
+		len += c->len;
 		c = c->right;
 	}while(c != r);
 	fprint(2, "\n");
+}
+
+void
+dprint(Chunk *c, char *fmt, ...)
+{
+	char s[256];
+	va_list arg;
+
+	if(!debug)
+		return;
+	va_start(arg, fmt);
+	vseprint(s, s+sizeof s, fmt, arg);
+	va_end(arg);
+	fprint(2, "%s", s);
+	printchunks(c == nil ? norris : c);
 }
 
 static Chunk *
@@ -172,8 +211,8 @@ mergedot(usize *off)
 {
 	Chunk *left, *right;
 
-	left = p2c(dot.from.pos, off);
-	right = p2c(dot.to.pos, nil);
+	left = p2c(dot.from, off);
+	right = p2c(dot.to, nil);
 	if(left == right)
 		return left;
 	while(left->right != right)
@@ -182,15 +221,25 @@ mergedot(usize *off)
 }
 #endif
 
+usize
+chunklen(Chunk *c)
+{
+	usize n;
+	Chunk *cp;
+
+	for(cp=c, n=cp->len, cp=cp->right; cp!=c; cp=cp->right)
+		n += cp->len;
+	return n;
+}
+
 Chunk *
 p2c(usize p, usize *off)
 {
-	int x;
 	Chunk *c;
 
-	for(c=norris, x=0; p>=c->len; c=c->right){
-		if(c == norris && ++x > 1){
-			c = norris->left;
+	for(c=norris; p>=c->len; c=c->right){
+		if(c == norris->left){
+			assert(p == c->len);
 			break;
 		}
 		p -= c->len;
@@ -216,10 +265,11 @@ recalcsize(void)
 	int n;
 
 	n = c2p(norris->left) + norris->left->len;
-	if(dot.to.pos == totalsz || dot.to.pos > n)
-		dot.to.pos = n;
-	if(dot.pos < dot.from.pos || dot.pos > dot.to.pos)
-		dot.pos = dot.from.pos;
+	if(dot.to == totalsz || dot.to > n)
+		dot.to = n;
+	if(dot.pos < dot.from || dot.pos > dot.to)
+		dot.pos = dot.from;
+	dprint(nil, "final %Δ\n", &dot);
 	totalsz = n;
 }
 
@@ -231,7 +281,7 @@ paranoia(int exact)
 	Chunk *c, *pc;
 	Buf *b;
 
-	ASSERT(dot.pos >= dot.from.pos && dot.pos < dot.to.pos);
+	ASSERT(dot.pos >= dot.from && dot.pos < dot.to);
 	for(pc=norris, n=pc->len, c=pc->right; c!=norris; pc=c, c=c->right){
 		b = c->b;
 		ASSERT(b != nil);
@@ -244,7 +294,7 @@ paranoia(int exact)
 	}
 	if(exact){
 		ASSERT(n <= totalsz);
-		ASSERT(dot.to.pos <= totalsz);
+		ASSERT(dot.to <= totalsz);
 	}
 }
 #undef ASSERT
@@ -252,11 +302,25 @@ paranoia(int exact)
 void
 setdot(Dot *dot, Chunk *right)
 {
-	dot->from.pos = 0;
+	dot->from = 0;
 	if(right == nil)
-		dot->to.pos = c2p(norris->left) + norris->left->len;
+		dot->to = c2p(norris->left) + norris->left->len;
 	else
-		dot->to.pos = c2p(right);
+		dot->to = c2p(right);
+}
+
+void
+fixroot(Chunk *rc, usize off)
+{
+	Chunk *c;
+
+	dprint(rc, "fixroot [%χ] %08zux\n", rc, off);
+	for(c=rc->left; off>0; off-=c->len, c=c->left){
+		if(off - c->len == 0)
+			break;
+		assert(off - c->len < off);
+	}
+	norris = c;
 }
 
 Chunk *
@@ -264,7 +328,8 @@ splitchunk(Chunk *c, usize off)
 {
 	Chunk *nc;
 
-	if(off == 0)
+	dprint(nil, "splitchunk %Δ [%χ] off=%08zux\n", &dot, c, off);
+	if(off == 0 || c == norris->left && off == c->len)
 		return c;
 	assert(off <= c->len);
 	nc = clonechunk(c);
@@ -282,6 +347,7 @@ splitrange(usize from, usize to, Chunk **left, Chunk **right)
 	usize off;
 	Chunk *c;
 
+	dprint(nil, "splitrange from=%08zux to=%08zux\n", from, to);
 	c = p2c(from, &off);
 	if(off > 0){
 		splitchunk(c, off);
@@ -302,6 +368,7 @@ cutrange(usize from, usize to, Chunk **latch)
 {
 	Chunk *c, *left, *right;
 
+	dprint(nil, "cutrange from=%08zux to=%08zux\n", from, to);
 	if(splitrange(from, to, &left, &right) < 0)
 		return nil;
 	c = left->left;
@@ -316,12 +383,15 @@ cutrange(usize from, usize to, Chunk **latch)
 Chunk *
 croprange(usize from, usize to, Chunk **latch)
 {
-	Chunk *left, *right;
+	Chunk *cut, *left, *right;
 
+	dprint(nil, "croprange from=%08zux to=%08zux\n", from, to);
 	if(splitrange(from, to, &left, &right) < 0)
 		return nil;
 	norris = left;
-	*latch = right->right;
+	cut = right->right;
+	if(latch != nil)
+		*latch = cut;
 	unlink(right->right, left->left);
 	return left;
 }
@@ -332,8 +402,10 @@ inserton(usize from, usize to, Chunk *c, Chunk **latch)
 {
 	Chunk *left;
 
+	dprint(c, "inserton from=%08zux to=%08zux\n", from, to);
 	left = cutrange(from, to, latch);
 	linkchunk(left, c);
+	dprint(nil, "done\n");
 	return left;
 }
 
@@ -343,6 +415,7 @@ insertat(usize pos, Chunk *c)
 	usize off;
 	Chunk *left;
 
+	dprint(c, "insertat cur=%08zux\n", pos);
 	if(pos == 0){
 		left = norris->left;
 		norris = c;
@@ -350,6 +423,8 @@ insertat(usize pos, Chunk *c)
 		left = p2c(pos, &off);
 		splitchunk(left, off);
 	}
+	if(off == 0)
+		left = left->left;
 	linkchunk(left, c);
 	return left;
 }
@@ -366,14 +441,14 @@ getslice(Dot *d, usize n, usize *sz)
 		return nil;
 	}
 	c = p2c(d->pos, &off);
-	Δloop = d->to.pos - d->pos;
+	Δloop = d->to - d->pos;
 	Δbuf = c->len - off;
 	if(n < Δloop && n < Δbuf){
 		*sz = n;
 		d->pos += n;
 	}else if(Δloop <= Δbuf){
 		*sz = Δloop;
-		d->pos = d->from.pos;
+		d->pos = d->from;
 	}else{
 		*sz = Δbuf;
 		d->pos += Δbuf;

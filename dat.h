@@ -1,5 +1,4 @@
 typedef struct Chunk Chunk;
-typedef struct Pos Pos;
 typedef struct Dot Dot;
 typedef struct Buf Buf;
 
@@ -19,13 +18,10 @@ struct Chunk{
 	Chunk *left;
 	Chunk *right;
 };
-struct Pos{
-	usize pos;	/* bytes */
-};
 extern struct Dot{
-	Pos;
-	Pos from;
-	Pos to;
+	usize pos;
+	usize from;
+	usize to;
 };
 extern Dot dot;
 extern usize totalsz;
