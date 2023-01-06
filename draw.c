@@ -278,6 +278,12 @@ setpan(int Δx)
 }
 
 void
+setpage(int d)
+{
+	setpan(d * (vlong)T * Dx(screen->r) / Dx(view->r));
+}
+
+void
 setloop(vlong off)
 {
 	off *= T;

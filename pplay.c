@@ -153,6 +153,8 @@ threadmain(int argc, char **argv)
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;
 			case '+': setzoom(1, 1); break;
+			case Kleft: setpage(-1); break;
+			case Kright: setpage(1); break;
 			default:
 				if(treadsoftly){
 					fprint(2, "dropping edit event during ongoing read\n");

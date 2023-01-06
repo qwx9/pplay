@@ -19,6 +19,7 @@ void	update(void);
 void	setzoom(int, int);
 int	zoominto(vlong, vlong);
 void	setpan(int);
+void	setpage(int);
 void	setloop(vlong);
 void	setofs(usize);
 void	setjump(usize);
