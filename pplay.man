@@ -1,89 +1,188 @@
 .TH PPLAY 1
 .SH NAME
-pplay \- visual PCM audio player
+pplay \- visual PCM audio player and editor
 .SH SYNOPSIS
 .B audio/pplay
 [
-.B -cfs
+.B -cs
 ] [
 .B pcmfile
 ]
 .SH DESCRIPTION
 .I Pplay
-is a PCM audio player which shows a time-domain graphical plot of the data.
+is a PCM audio player which shows a time-domain graphical plot of the data
+and allows for some simple editing operations.
 It operates on the same format used by the audio device (see
 .IR audio (3)).
+.SS "Command line parameters"
+.TF "pcmfile"
+.TP
+.B -c
+Write audio to standard out instead of
+.B /dev/audio
+.TP
+.B -s
+Draw right channel's waveform as well
+.TP
+.B pcmfile
+Read file instead of standard in
+.PD
 .PP
-At startup, the program loads the audio data in its entirety into memory,
-unless the
-.B -f
-option is given, in which case the input file must be seekable.
-Data is read either from the file provided as argument, or from standard in.
+At startup, all input data is loaded in its entirety into memory,
+either from
+.B pcmfile
+if provided, or from standard in.
 By default,
 .I pplay
-writes audio data back to
+writes audio data to
 .BR /dev/audio .
-With the
+The
 .B -c
-option, it writes to standard out instead.
+option instructs it to write to standard out instead.
+.SS "Keyboard and mouse commands list"
+Key commands:
+.TF "="
+.TP
+.B q
+Quit
+.TP
+.B ␣
+Toggle play/pause
+.TP
+.B ␣
+Jump to loop start
+.TP
+.B ↵
+Zoom into the entire dot
+.TP
+.B =
+Zoom in
+.TP
+.B -
+Zoom out
+.TP
+.B +
+Fine zoom in
+.TP
+.B _
+Fine zoom out
+.TP
+.B ↵
+Zoom into the entire dot
+.TP
+.B z
+Reset zoom
+.TP
+.B ←
+Pan left by screenful
+.TP
+.B →
+Pan right by screenful
+.PD
 .PP
-The graphical plot shows a time-domain representation of the audio data's left channel.
-The
-.B -s
-option enables plotting its right channel below the left.
-.PP
-The current position in the buffer is shown by a vertical line.
-It can be set using the left mouse button.
-.PP
+Mouse commands:
+.TF "1 "
+.TP
+.B 1
+Set cursor
+.TP
+.B 2
+Set left or right dot bound
+.TP
+.B 3
+Pan view horizontally
+.PD
+.SS "Dot and cursor position"
 .I Pplay
-loops a section of the audio data indefinitely.
-At start up, this section is set to the entire file.
-The section's beginning and end are shown by vertical markers of the same color.
-Both are set by using the middle mouse button,
-relative to the current position in the buffer:
-clicking to the left of the position marker will set the loop start position, and vice versa.
-The
-.B r
-key resets both loop positions to their default values.
+loops an interval, referred to as the
+.IR dot ,
+indefinitely.
+The dot is set by default to the entire file.
+The current position (cursor) in the buffer is shown by an orangle vertical line,
+which can be set by clicking with the left mouse button
+anywhere within the dot.
+The dot is shown by two vertical grey lines on either side of the cursor.
+When clicking with the middle mouse button,
+which bound will be set depends on the click position relative to the cursor,
+to the left for the lower bound, and to the right for the upper one.
+The cursor may never escape the dot.
+.SS "Display"
+The graphical plot shows the maximal and minimal sample value
+among the pixels packed in each pixel column,
+by default for the left channel only.
 .PP
-By default, the graphical plot spans the dimensions of the window.
-It can be zoomed in or out with the
-.L +
-and
-.L -
-keys, and reset with the
-.L z
-key.
-The
-.L _
-and
-.L =
-keys zoom in by greater increments.
-The view can then be moved by holding the right mouse button,
-and moving the cursor horizontally.
+A line of status text on the bottom left of the graphical view
+displays timing information, the cursor and the dot,
+in number of
+.I samples
+rather than bytes.
+It is of the form:
+.TF "@ N"
+.TP
+.BI T n
+Number of samples per pixel column.
+.TP
+.BI @ n
+Time in hh:mm:ss.tt format (see
+.IR tmdate (2).
+.TP
+.BI ( n )
+Absolute cursor position in number of samples.
+.TP
+.BI · n
+Left bound of the dot.
+.TP
+.BI ↺ n
+Right bound of the dot, or
+.B ∞
+if end of file).
+.PD
 .PP
-The space key pauses playback.
-The
-.L b
-key resets the position to that of the loop start position.
+By default, the entire buffer is displayed, spanning the width of the window.
+The y axis spans the entire range of possible values of a 16bit signed integer sample,
+with positive values above the midpoint.
+.SS "Editing commands list"
+Editing commands:
+.TF "r file"
+.TP
+.BI < cmd
+Pipe output of a system command into dot
+.TP
+.BI ^ cmd
+Pipe dot to command and pipe its output into dot
+.TP
+.BI | cmd
+Pipe dot to command
+.TP
+.B c
+Snarf dot
+.TP
+.B d
+Cut dot, replacing snarf buffer
+.TP
+.B p
+Paste snarf buffer into dot
+.TP
+.BI r file
+Read file into dot
+.TP
+.B u
+Undo edit and dot changes
+.TP
+.BI w file
+Write dot to file
+.TP
+.B x
+Crop to dot
+.PD
 .PP
-The
-.L w
-key prompts the user to enter a file path to write the looped section to.
 .SH EXAMPLES
-Load and play an mp3 file (see
-.IR audio (1)):
-.IP
-.EX
-% audio/mp3dec <file.mp3 | pplay
-.EE
-.PP
 Use
 .IR play (1)
 to decode any known audio format:
 .IP
 .EX
-% play -o /fd/1 file | pplay
+% play -o /fd/1 file | audio/pplay
 .EE
 .SH "SEE ALSO"
 .IR audio (1),
@@ -91,4 +190,4 @@ to decode any known audio format:
 .IR audio (3)
 .SH HISTORY
 .I Pplay
-first appeared in 9front (October, 2017).
+first spawned on 9front (October, 2017), outside of the environment.
