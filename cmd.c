@@ -392,7 +392,7 @@ readfrom(char *s)
 static int
 writeto(char *arg)
 {
-	int r, fd;
+	int fd;
 
 	if(dot.to - dot.from == 0){
 		werrstr("writeto: dot isn't a range");
@@ -402,9 +402,12 @@ writeto(char *arg)
 		werrstr("writeto: %r");
 		return -1;
 	}
-	r = writebuf(fd);
+	if(procrfork(wproc, (int*)fd, mainstacksize, RFFDG) < 0){
+		fprint(2, "procrfork: %r\n");
+		return -1;
+	}
 	close(fd);
-	return r;
+	return 0;
 }
 
 int

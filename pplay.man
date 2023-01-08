@@ -263,6 +263,8 @@ Drawing halts while playback is paused.
 .PP
 Mousing, in particular for panning, can be uncomfortable or annoying.
 .PP
+There are no safeguards against races when writing to file.
+.PP
 The data structure implementation underlying the editing commands
 is, despite much effort to the contrary, still prone to off-by-ones
 and other bugs.
