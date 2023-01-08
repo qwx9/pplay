@@ -24,7 +24,7 @@ void	setloop(vlong);
 void	setofs(usize);
 void	setjump(usize);
 void	redraw(int);
-void	initdrw(void);
+void	initdrw(int);
 int	advance(Dot*, usize);
 int	jump(usize);
 Chunk*	p2c(usize, usize*);

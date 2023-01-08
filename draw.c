@@ -14,6 +14,7 @@ enum{
 	Cline,
 	Cloop,
 	Cchunk,
+	Ctext,
 	Ncol,
 };
 static Image *col[Ncol];
@@ -169,7 +170,7 @@ drawstat(void)
 			th, tm, ts, tμ, dot.to/4);
 	}else
 		seprint(p, s+sizeof s, "∞");
-	string(screen, statp, col[Cline], ZP, font, s);
+	string(screen, statp, col[Ctext], ZP, font, s);
 }
 
 static void
@@ -369,17 +370,18 @@ redraw(int all)
 }
 
 void
-initdrw(void)
+initdrw(int fuckit)
 {
 	if(initdraw(nil, nil, "pplay") < 0)
 		sysfatal("initdraw: %r");
 	display->locking = 1;
 	unlockdisplay(display);
-	col[Cbg] = eallocimage(Rect(0,0,1,1), 1, DBlack);
-	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x440000FF);
-	col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0x884400FF);
-	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
-	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xBBBB00FF);
+	col[Cbg] = fuckit ? display->white : display->black;
+	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, fuckit ? 0x555555FF : 0x2A2A2AFF);
+	col[Ctext] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DBlack : 0xBBBBBBFF);
+	col[Cline] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPaleyellow: 0xEEA000FF);
+	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPurpleblue: 0x8888CCFF);
+	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xEE0000FF);
 	if((drawc = chancreate(sizeof(ulong), 4)) == nil)
 		sysfatal("chancreate: %r");
 	if(proccreate(drawsamps, nil, mainstacksize) < 0)

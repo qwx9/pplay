@@ -78,20 +78,22 @@ prompt(Rune r)
 static void
 usage(void)
 {
-	fprint(2, "usage: %s [-Dcs] [pcm]\n", argv0);
+	fprint(2, "usage: %s [-Dbcs] [pcm]\n", argv0);
 	threadexits("usage");
 }
 
 void
 threadmain(int argc, char **argv)
 {
-	int fd;
+	int fd, notriob;
 	char *p;
 	Mouse mo;
 	Rune r;
 
+	notriob = 0;
 	ARGBEGIN{
 	case 'D': debug = 1; debugdraw = 1; break;
+	case 'b': notriob = 1; break;
 	case 'c': cat = 1; break;
 	case 's': stereo = 1; break;
 	default: usage();
@@ -103,7 +105,7 @@ threadmain(int argc, char **argv)
 	if(loadin(fd) < 0)
 		sysfatal("inittrack: %r");
 	close(fd);
-	initdrw();
+	initdrw(notriob);
 	if((kc = initkeyboard(nil)) == nil)
 		sysfatal("initkeyboard: %r");
 	if((mc = initmouse(nil, screen)) == nil)
