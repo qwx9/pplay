@@ -123,7 +123,7 @@ clonechunk(Chunk *c)
 	return nc;
 }
 Chunk *
-replicate(Chunk *left, Chunk *right)
+clone(Chunk *left, Chunk *right)
 {
 	Chunk *cl, *c, *nc;
 

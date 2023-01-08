@@ -164,6 +164,11 @@ Cut dot, replacing snarf buffer
 .BI r\  file
 ∗ Read file into dot or at the cursor
 .TP
+.B s
+Show dot by piping it to a new
+.IR pplay (1)
+instance
+.TP
 .B u
 Undo an edit and dot change
 .TP

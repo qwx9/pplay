@@ -5,7 +5,7 @@ usize	chunklen(Chunk*);
 void	recalcsize(void);
 void	paranoia(int);
 void	setdot(Dot*, Chunk*);
-Chunk*	replicate(Chunk*, Chunk*);
+Chunk*	clone(Chunk*, Chunk*);
 int	splitrange(usize, usize, Chunk**, Chunk**);
 void	graphfrom(Chunk*);
 Chunk*	inserton(usize, usize, Chunk*, Chunk**);

@@ -149,7 +149,7 @@ paste(char *s, Chunk *c)
 		werrstr("paste: no buffer");
 		return -1;
 	}
-	c = replicate(c, c->left);
+	c = clone(c, c->left);
 	if(dot.from == 0 && dot.to == totalsz)
 		return insert(s, c);
 	else
@@ -172,7 +172,7 @@ copy(char *)
 
 	dprint(hold, "cmd/copy %Δ\n", &dot);
 	splitrange(dot.from, dot.to, &left, &right);
-	snarf(replicate(left, right));
+	snarf(clone(left, right));
 	return 0;
 }
 
@@ -188,7 +188,7 @@ cut(char *)
 	dprint(nil, "cmd/cut %Δ\n", &dot);
 	cutrange(dot.from, dot.to, &latch);
 	dprint(latch, "latched\n");
-	snarf(replicate(latch, latch->left));
+	snarf(clone(latch, latch->left));
 	pushop(OPdel, dot.from, dot.from+chunklen(latch)-1, latch);
 	setdot(&dot, nil);
 	return 1;
@@ -364,6 +364,15 @@ pipethrough(char *arg)
 }
 
 static int
+replicate(char *)
+{
+	static char u[256];
+
+	snprint(u, sizeof u, "<[3=0] window -m %s /fd/3", argv0);
+	return pipeto(u);
+}
+
+static int
 readfrom(char *s)
 {
 	int fd;
@@ -429,6 +438,7 @@ cmd(char *s)
 	case 'p': x = paste(s, nil); break;
 	case 'q': threadexitsall(nil);
 	case 'r': x = readfrom(s); break;
+	case 's': x = replicate(s); break;
 //	case 'U': x = unpop(s); break;
 	case 'u': x = popop(s); break;
 	case 'w': x = writeto(s); break;
