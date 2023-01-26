@@ -373,7 +373,7 @@ cutrange(usize from, usize to, Chunk **latch)
 		return nil;
 	c = left->left;
 	if(left == norris)
-		norris = c;
+		norris = right->right;
 	unlink(left, right);
 	if(latch != nil)
 		*latch = left;
