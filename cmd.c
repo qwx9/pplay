@@ -315,8 +315,10 @@ rthread(void *efd)
 	d = dot;
 	treadsoftly = 1;
 	fd = (intptr)efd;
-	if((c = readintochunks(fd)) == nil)
+	if((c = readintochunks(fd)) == nil){
+		treadsoftly = 0;
 		threadexits("failed reading from pipe: %r");
+	}
 	close(fd);
 	dot = d;
 	pushop(OPins, dot.from, dot.from+chunklen(c)-1, nil);
