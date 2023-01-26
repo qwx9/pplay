@@ -4,7 +4,7 @@ pplay \- visual PCM audio player and editor
 .SH SYNOPSIS
 .B audio/pplay
 [
-.B -Dcs
+.B -Dc
 ] [
 .B pcmfile
 ]
@@ -27,15 +27,12 @@ is specified.
 .SS "Command line parameters"
 .TF "pcmfile"
 .TP
-.B -c
+.B -D
 Turn verbose debugging info on
 .TP
 .B -c
 Write audio to standard out instead of
 .B /dev/audio
-.TP
-.B -s
-Draw right channel's waveform as well
 .TP
 .B pcmfile
 Read file instead of standard in
@@ -46,6 +43,12 @@ Key commands:
 .TP
 .B q
 Quit
+.TP
+.B D
+Toggle debug draws
+.TP
+.B S
+Toggle stereo display (default left channel only)
 .TP
 .B ␣
 Toggle play/pause
