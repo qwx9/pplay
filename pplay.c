@@ -28,7 +28,8 @@ athread(void *)
 	for(;;){
 		if(afd < 0 || nerr > 10)
 			return;
-		if((n = getbuf(dot, Outsz, sbuf, sizeof sbuf)) < 0){
+		n = getbuf(dot, Outsz, sbuf, sizeof sbuf);
+		if(n < 0){
 			fprint(2, "athread: %r\n");
 			nerr++;
 			continue;
