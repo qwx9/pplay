@@ -74,7 +74,7 @@ drawpos(usize pos, Image *c)
 	Rectangle r;
 
 	x = (pos - views) / T;
-	if(x < views || x >= viewe)
+	if(x <= views || x >= viewe)
 		return 0;
 	r = view->r;
 	r.min.x += x;
@@ -321,28 +321,24 @@ static void
 resetdraw(void)
 {
 	int x;
-	Rectangle viewr, midr;
+	Rectangle viewr;
 
 	x = screen->r.min.x + (dot.pos - views) / T;
 	viewr = rectsubpt(screen->r, screen->r.min);
+	statp = screen->r.min;
+	if(stereo)
+		statp.y += (Dy(screen->r) - font->height) / 2 + 1;
+	else
+		statp.y = screen->r.max.y - font->height;
 	freeimage(viewbg);
 	freeimage(view);
-	viewbg = eallocimage(viewr, 0, DBlack);
-	view = eallocimage(viewr, 0, DBlack);
-	if(stereo){
-		midr = viewr;
-		midr.min.y = midr.max.y / 2;
-		midr.max.y = midr.min.y + 1;
-		draw(viewbg, midr, col[Csamp], nil, ZP);
-		statp = Pt(screen->r.min.x,
-			screen->r.min.y + (Dy(screen->r) - font->height) / 2 + 1);
-	}else
-		statp = Pt(screen->r.min.x, screen->r.max.y - font->height);
+	viewbg = eallocimage(viewr, 0, DNofill);
+	view = eallocimage(viewr, 0, DNofill);
 	liner = screen->r;
 	liner.min.x = x;
 	liner.max.x = x + 1;
-	bgscalyl = viewbg->r.max.y / (stereo ? 4 : 2);
-	bgscalyr = viewbg->r.max.y - bgscalyl;
+	bgscalyl = (viewr.max.y - font->height) / (stereo ? 4 : 2);
+	bgscalyr = viewr.max.y - bgscalyl;
 	bgscalf = 32767 / bgscalyl;
 }
 
@@ -379,7 +375,7 @@ initdrw(int fuckit)
 		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, DBlack);
 		col[Ctext] = display->black;
 		col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0xFF2222FF);
-		col[Cins] = eallocimage(Rect(0,0,1,1), 1, DMedgreen);
+		col[Cins] = eallocimage(Rect(0,0,1,1), 1, DDarkgreen);
 		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x4444FFFF);
 		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, DPaleyellow);
 	}else{
