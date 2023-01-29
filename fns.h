@@ -36,6 +36,7 @@ vlong	getbuf(Dot, usize, uchar*, usize);
 int	loadin(int);
 int	χfmt(Fmt*);
 int	Δfmt(Fmt*);
+int	τfmt(Fmt*);
 void*	emalloc(usize);
 void*	erealloc(void*, usize, usize);
 char*	estrdup(char*);
@@ -44,3 +45,4 @@ int	setpri(int);
 #pragma	varargck	argpos	dprint	2
 #pragma	varargck	type	"χ"	Chunk*
 #pragma	varargck	type	"Δ"	Dot*
+#pragma	varargck	type	"τ"	usize

@@ -39,26 +39,60 @@ eallocimage(Rectangle r, int repl, ulong col)
 }
 
 static void
-drawchunks(void)
+b2t(usize off, int *th, int *tm, int *ts, int *tμ)
+{
+	usize nsamp;
+
+	nsamp = off / Sampsz;
+	*ts = nsamp / Rate;
+	*tm = *ts / 60;
+	*th = *tm / 60;
+	*tμ = 100 * (nsamp - *ts * Rate) / Rate;
+	*ts %= 60;
+	*tm %= 60;
+}
+
+int
+τfmt(Fmt *fmt)
+{
+	int th, tm, ts, tμ;
+	usize p;
+
+	p = va_arg(fmt->args, usize);
+	if(p > totalsz)
+		return fmtstrcpy(fmt, "-∞");
+	b2t(p, &th, &tm, &ts, &tμ);
+	return fmtprint(fmt, "%02d:%02d:%02d.%03d (%zd)",
+		th, tm, ts, tμ, p / Sampsz);
+}
+
+static int
+drawpos(usize pos, Image *c)
 {
 	int x;
-	usize p, off;
-	Chunk *c;
 	Rectangle r;
 
-	c = p2c(views, &off);
+	x = (pos - views) / T;
+	if(x < views || x >= viewe)
+		return 0;
 	r = view->r;
+	r.min.x += x;
+	r.max.x = r.min.x + 1;
+	draw(view, r, c, nil, ZP);
+	return 1;
+}
+
+static void
+drawchunks(void)
+{
+	usize p, off;
+	Chunk *c;
+
+	c = p2c(views, &off);
 	for(p=views-off; p<viewe; p+=c->len, c=c->right){
 		if(p == 0)
 			continue;
-		x = (p - views) / T;
-		if(x > Dx(view->r))
-			break;
-		r = view->r;
-		r.min.x += x;
-		r.max.x = r.min.x + 1;
-		draw(view, r, col[Cchunk], nil, ZP);
-		if(c->len == 0)
+		if(!drawpos(p, col[Cchunk]) || c->len == 0)
 			break;
 	}
 }
@@ -136,69 +170,27 @@ again:
 }
 
 static void
-b2t(usize ofs, int *th, int *tm, int *ts, int *tμ)
-{
-	usize nsamp;
-
-	nsamp = ofs / 4;
-	*ts = nsamp / 44100;
-	*tm = *ts / 60;
-	*th = *tm / 60;
-	*tμ = 100 * (nsamp - *ts * 44100) / 44100;
-	*ts %= 60;
-	*tm %= 60;
-}
-
-static void
 drawstat(void)
 {
-	int th, tm, ts, tμ;
-	char s[256], *p;
+	char s[256];
+	Point p;
 
-	b2t(dot.pos, &th, &tm, &ts, &tμ);
-	p = seprint(s, s+sizeof s, "T %zd @ %02d:%02d:%02d.%03d (%zd) ⋅ ",
-		T/4, th, tm, ts, tμ, dot.pos/4);
-	if(dot.from > 0){
-		b2t(dot.from, &th, &tm, &ts, &tμ);
-		p = seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%zd) ↺ ",
-			th, tm, ts, tμ, dot.from/4);
-	}else
-		p = seprint(p, s+sizeof s, "0 ↺ ");
-	if(dot.to != totalsz){
-		b2t(dot.to, &th, &tm, &ts, &tμ);
-		seprint(p, s+sizeof s, "%02d:%02d:%02d.%03d (%zd)",
-			th, tm, ts, tμ, dot.to/4);
-	}else
-		seprint(p, s+sizeof s, "∞");
-	string(screen, statp, col[Ctext], ZP, font, s);
+	seprint(s, s+sizeof s, "T %zd @ %τ", T / Sampsz, dot.pos);
+	p = string(screen, statp, col[Ctext], ZP, font, s);
+	if(dot.from > 0 || dot.to < totalsz){
+		seprint(s, s+sizeof s, " ↺ %τ - %τ", dot.from, dot.to);
+		p = string(screen, p, col[Cloop], ZP, font, s);
+	}
 }
 
 static void
 drawview(void)
 {
-	int x;
-	usize left, right;
-	Rectangle r;
-
-	left = dot.from;
 	draw(view, view->r, viewbg, nil, ZP);
-	if(left != 0 && left >= views){
-		x = (left - views) / T;
-		r = view->r;
-		r.min.x += x;
-		r.max.x = r.min.x + 1;
-		draw(view, r, col[Cloop], nil, ZP);
-	}
-	right = dot.to;
-	if(right != totalsz){
-		x = (right - views) / T;
-		r = view->r;
-		r.min.x += x;
-		r.max.x = r.min.x + 1;
-		draw(view, r, col[Cloop], nil, ZP);
-	}
 	if(debugdraw)
 		drawchunks();
+	drawpos(dot.from, col[Cloop]);
+	drawpos(dot.to, col[Cloop]);
 }
 
 void

@@ -102,6 +102,7 @@ threadmain(int argc, char **argv)
 		sysfatal("open: %r");
 	fmtinstall(L'Δ', Δfmt);
 	fmtinstall(L'χ', χfmt);
+	fmtinstall(L'τ', τfmt);
 	if(loadin(fd) < 0)
 		sysfatal("inittrack: %r");
 	close(fd);
