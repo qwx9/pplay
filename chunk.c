@@ -183,44 +183,6 @@ shrinkbuf(Chunk *c, usize newsz)
 	b->buf = erealloc(b->buf, newsz, b->bufsz);
 }
 
-#ifdef nope
-static Chunk *
-merge(Chunk *left, Chunk *right)
-{
-	uchar *u;
-	Buf *l, *r;
-	Chunk *nc;
-
-	if(left == right)
-		return left;
-	l = left->b;
-	r = right->b;
-	assert(l != nil && r != nil);
-	nc = newbuf(left->len + right->len);
-	u = nc->b->buf;
-	memcpy(u, l->buf+left->off, left->len);
-	memcpy(u + left->len, r->buf+right->off, right->len);
-	linkchunk(left->left, nc);
-	unlink(left, right);
-	freechain(left);
-	return nc;
-}
-
-Chunk *
-mergedot(usize *off)
-{
-	Chunk *left, *right;
-
-	left = p2c(dot.from, off);
-	right = p2c(dot.to, nil);
-	if(left == right)
-		return left;
-	while(left->right != right)
-		left = merge(left, left->right);
-	return merge(left, right);
-}
-#endif
-
 usize
 chunklen(Chunk *c)
 {

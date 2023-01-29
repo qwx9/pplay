@@ -448,7 +448,6 @@ cmd(char *s)
 	case '|': x = pipeto(s); break;
 	case 'c': x = copy(s); break;
 	case 'd': x = cut(s); break;
-//	case 'm': x = forcemerge(s); break;
 	case 'p': x = paste(s, nil); break;
 	case 'q': threadexitsall(nil);
 	case 'r': x = readfrom(s); break;
