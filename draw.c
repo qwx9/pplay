@@ -374,13 +374,23 @@ initdrw(int fuckit)
 		sysfatal("initdraw: %r");
 	display->locking = 1;
 	unlockdisplay(display);
-	col[Cbg] = fuckit ? display->white : display->black;
-	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, fuckit ? 0x555555FF : 0x2A2A2AFF);
-	col[Ctext] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DBlack : 0xBBBBBBFF);
-	col[Cline] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPaleyellow: 0xEEA000FF);
-	col[Cins] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPaleblue: 0x509A9AFF);
-	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPurpleblue: 0x8888CCFF);
-	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xEE0000FF);
+	if(fuckit){
+		col[Cbg] = eallocimage(Rect(0,0,1,1), 1, 0xFFFFEAFF);
+		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, DBlack);
+		col[Ctext] = display->black;
+		col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0xFF2222FF);
+		col[Cins] = eallocimage(Rect(0,0,1,1), 1, DMedgreen);
+		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x4444FFFF);
+		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, DPaleyellow);
+	}else{
+		col[Cbg] = display->black;
+		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x2A2A2AFF);
+		col[Ctext] = eallocimage(Rect(0,0,1,1), 1, 0xBBBBBBFF);
+		col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0xEEA000FF);
+		col[Cins] = eallocimage(Rect(0,0,1,1), 1, 0x509A9AFF);
+		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x8888CCFF);
+		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xEE0000FF);
+	}
 	if((drawc = chancreate(sizeof(ulong), 4)) == nil)
 		sysfatal("chancreate: %r");
 	if(proccreate(drawsamps, nil, mainstacksize) < 0)
