@@ -40,6 +40,7 @@ setrange(usize from, usize to)
 	dot.to = to;
 	if(dot.pos < from || dot.pos >= to)
 		dot.pos = from;
+	dot.at = -1ULL;
 }
 
 int
@@ -50,6 +51,8 @@ jump(usize off)
 		return -1;
 	}
 	dot.pos = off;
+	if(dot.from == 0 && dot.to == totalsz)
+		dot.at = off;
 	return 0;
 }
 
@@ -129,15 +132,21 @@ insert(char *, Chunk *c)
 		fprint(2, "insert: nothing to paste\n");
 		return -1;
 	}
+	if(dot.at == -1ULL){
+		fprint(2, "insert: nowhere to paste\n");
+		return -1;
+	}
+	assert(dot.at <= dot.to);
 	dprint(nil, "cmd/insert %Δ\n", &dot);
 	dprint(c, "buffered\n");
-	pushop(OPins, dot.pos, dot.pos+chunklen(c)-1, nil);
-	if((left = insertat(dot.pos, c)) == nil){
+	pushop(OPins, dot.at, dot.at+chunklen(c)-1, nil);
+	if((left = insertat(dot.at, c)) == nil){
 		fprint(2, "insert: %r\n");
 		return -1;
 	}
 	setdot(&dot, nil);
 	dot.pos = c2p(left->right);
+	dot.at = -1ULL;
 	dprint(nil, "end\n");
 	return 1;
 }
@@ -150,10 +159,10 @@ paste(char *s, Chunk *c)
 		return -1;
 	}
 	c = clone(c, c->left);
-	if(dot.from == 0 && dot.to == totalsz)
-		return insert(s, c);
-	else
+	if(dot.from > 0 || dot.to < totalsz)
 		return replace(s, c);
+	else
+		return insert(s, c);
 }
 
 static void

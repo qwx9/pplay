@@ -12,6 +12,7 @@ enum{
 	Cbg,
 	Csamp,
 	Cline,
+	Cins,
 	Cloop,
 	Cchunk,
 	Ctext,
@@ -181,6 +182,10 @@ drawstat(void)
 		seprint(s, s+sizeof s, " ↺ %τ - %τ", dot.from, dot.to);
 		p = string(screen, p, col[Cloop], ZP, font, s);
 	}
+	if(dot.at != -1ULL){
+		seprint(s, s+sizeof s, " ‡ %τ", dot.at);
+		p = string(screen, p, col[Cins], ZP, font, s);
+	}
 }
 
 static void
@@ -191,6 +196,7 @@ drawview(void)
 		drawchunks();
 	drawpos(dot.from, col[Cloop]);
 	drawpos(dot.to, col[Cloop]);
+	drawpos(dot.at, col[Cins]);
 }
 
 void
@@ -372,6 +378,7 @@ initdrw(int fuckit)
 	col[Csamp] = eallocimage(Rect(0,0,1,1), 1, fuckit ? 0x555555FF : 0x2A2A2AFF);
 	col[Ctext] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DBlack : 0xBBBBBBFF);
 	col[Cline] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPaleyellow: 0xEEA000FF);
+	col[Cins] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPaleblue: 0x509A9AFF);
 	col[Cloop] = eallocimage(Rect(0,0,1,1), 1, fuckit ? DPurpleblue: 0x8888CCFF);
 	col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xEE0000FF);
 	if((drawc = chancreate(sizeof(ulong), 4)) == nil)

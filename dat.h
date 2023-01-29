@@ -21,6 +21,7 @@ struct Chunk{
 extern struct Dot{
 	usize pos;
 	usize from;
+	usize at;
 	usize to;
 };
 extern Dot dot;

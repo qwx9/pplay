@@ -19,9 +19,9 @@ int
 
 	d = va_arg(fmt->args, Dot*);
 	if(d == nil)
-		return fmtstrcpy(fmt, "[??:??:??]");
-	return fmtprint(fmt, "[from=%08zux cur=%08zux to=%08zux]",
-		d->from, d->pos, d->to);
+		return fmtstrcpy(fmt, "[??:??:??:??]");
+	return fmtprint(fmt, "[from=%08zux cur=%08zux at=%08zux to=%08zux]",
+		d->from, d->pos, d->at, d->to);
 }
 
 int
@@ -269,6 +269,7 @@ recalcsize(void)
 		dot.to = n;
 	if(dot.pos < dot.from || dot.pos > dot.to)
 		dot.pos = dot.from;
+	dot.at = -1ULL;
 	dprint(nil, "final %Δ\n", &dot);
 	totalsz = n;
 }
@@ -307,6 +308,7 @@ setdot(Dot *dot, Chunk *right)
 		dot->to = c2p(norris->left) + norris->left->len;
 	else
 		dot->to = c2p(right);
+	dot->at = -1ULL;
 }
 
 void
