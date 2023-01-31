@@ -70,14 +70,12 @@ int
 static int
 drawpos(usize pos, Image *c)
 {
-	int x;
 	Rectangle r;
 
-	x = (pos - views) / T;
-	if(x <= views || x >= viewe)
+	if(pos <= views || pos >= viewe)
 		return 0;
 	r = view->r;
-	r.min.x += x;
+	r.min.x += (pos - views) / T;
 	r.max.x = r.min.x + 1;
 	draw(view, r, c, nil, ZP);
 	return 1;
@@ -93,8 +91,7 @@ drawchunks(void)
 	for(p=views-off; p<viewe; p+=c->len, c=c->right){
 		if(p == 0)
 			continue;
-		if(!drawpos(p, col[Cchunk]) || c->len == 0)
-			break;
+		drawpos(p, col[Cchunk]);
 	}
 }
 
@@ -208,8 +205,8 @@ update(void)
 	p = dot.pos;
 	lockdisplay(display);
 	drawview();
-	x = screen->r.min.x + (p - views) / T;
 	draw(screen, screen->r, view, nil, ZP);
+	x = screen->r.min.x + (p - views) / T;
 	liner.min.x = x;
 	liner.max.x = x + 1;
 	if(p >= views)
