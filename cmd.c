@@ -179,10 +179,6 @@ copy(char *)
 {
 	Chunk *left, *right;
 
-	if(dot.from == 0 && dot.to == totalsz){
-		werrstr("copy: no range selected");
-		return -1;
-	}
 	dprint(hold, "cmd/copy %Δ\n", &dot);
 	splitrange(dot.from, dot.to, &left, &right);
 	snarf(clone(left, right));
