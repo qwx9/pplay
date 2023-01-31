@@ -369,6 +369,8 @@ inserton(usize from, usize to, Chunk *c, Chunk **latch)
 	dprint(c, "inserton from=%08zux to=%08zux\n", from, to);
 	left = cutrange(from, to, latch);
 	linkchunk(left, c);
+	if(from == 0)
+		norris = c;
 	dprint(nil, "done\n");
 	return left;
 }

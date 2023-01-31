@@ -330,7 +330,6 @@ rthread(void *efd)
 	}
 	close(fd);
 	dot = d;
-	pushop(OPins, dot.from, dot.from+chunklen(c)-1, nil);
 	paste(nil, c);
 	dot.pos = dot.from;
 	setdot(&dot, nil);
