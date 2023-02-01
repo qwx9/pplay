@@ -262,6 +262,7 @@ paranoia(int exact)
 }
 #undef ASSERT
 
+/* FIXME: should set .pos as well? or just bounds? s/setdot/setbounds/? */
 void
 setdot(Dot *dot, Chunk *right)
 {

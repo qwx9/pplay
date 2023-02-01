@@ -199,6 +199,7 @@ cut(char *)
 	dprint(latch, "latched\n");
 	snarf(clone(latch, latch->left));
 	pushop(OPdel, dot.from, dot.from+chunklen(latch)-1, latch);
+	dot.pos = dot.from;
 	setdot(&dot, nil);
 	return 1;
 }
