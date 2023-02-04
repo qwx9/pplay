@@ -162,7 +162,10 @@ again:
 				draw(viewbg, r, col[Csamp], nil, ZP);
 			unlockdisplay(display);
 			x = (d.pos - views) / T;
+			if(x % 100 == 0)
+				update();
 		}
+		update();
 		qunlock(&lsync);
 	}
 }
