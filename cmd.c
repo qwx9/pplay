@@ -312,7 +312,7 @@ wproc(void *efd)
 /* using a thread does slow down reads a bit */
 // FIXME: ugly
 static void
-rthread(void *efd)
+rproc(void *efd)
 {
 	int fd;
 	Dot d;
@@ -348,8 +348,8 @@ pipeline(char *arg, int rr, int wr)
 		fprint(2, "procrfork: %r\n");
 		return -1;
 	}
-	if(rr && threadcreate(rthread, (int*)dup(epfd[1], -1), mainstacksize) < 0){
-		fprint(2, "threadcreate: %r\n");
+	if(rr && procrfork(rproc, (int*)dup(epfd[1], -1), mainstacksize, RFFDG) < 0){
+		fprint(2, "procrfork: %r\n");
 		return -1;
 	}
 	close(epfd[1]);
@@ -390,8 +390,8 @@ readfrom(char *s)
 
 	if((fd = open(s, OREAD)) < 0)
 		return -1;
-	if(threadcreate(rthread, (int*)fd, mainstacksize) < 0){
-		fprint(2, "threadcreate: %r\n");
+	if(procrfork(rproc, (int*)fd, mainstacksize, RFFDG) < 0){
+		fprint(2, "procrfork: %r\n");
 		return -1;
 	}
 	return 0;
