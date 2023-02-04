@@ -40,7 +40,8 @@ athread(void *)
 		}
 		nerr = 0;
 		advance(&dot, n);
-		update();
+		if(viewdone)
+			update();
 		yield();
 	}
 }

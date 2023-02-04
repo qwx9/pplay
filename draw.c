@@ -28,6 +28,7 @@ static Channel *drawc;
 static usize T;
 static int sampwidth = 1;
 static double zoom = 1.0;
+int viewdone;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -162,9 +163,10 @@ again:
 				draw(viewbg, r, col[Csamp], nil, ZP);
 			unlockdisplay(display);
 			x = (d.pos - views) / T;
-			if(x % 100 == 0)
+			if(x % 320 == 0)
 				update();
 		}
+		viewdone = 1;
 		update();
 		qunlock(&lsync);
 	}
@@ -205,6 +207,8 @@ update(void)
 	int x;
 	usize p;
 
+	if(!viewdone)
+		return;
 	p = dot.pos;
 	lockdisplay(display);
 	drawview();
@@ -360,7 +364,7 @@ redraw(int all)
 		resetdraw();
 	unlockdisplay(display);
 	nbsendul(drawc, 1);
-	update();
+	viewdone = 0;
 }
 
 void
