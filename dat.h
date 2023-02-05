@@ -27,6 +27,7 @@ extern struct Dot{
 extern Dot dot;
 extern usize totalsz;
 extern int treadsoftly;
+extern int viewdone;
 
 extern int stereo;
 extern int debug;
