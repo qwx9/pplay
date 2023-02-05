@@ -7,6 +7,7 @@
 
 QLock lsync;
 int debugdraw;
+int viewdone;
 
 enum{
 	Cbg,
@@ -28,7 +29,6 @@ static Channel *drawc;
 static usize T;
 static int sampwidth = 1;
 static double zoom = 1.0;
-int viewdone;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -362,9 +362,9 @@ redraw(int all)
 	viewe = views + span;
 	if(all)
 		resetdraw();
+	viewdone = 0;
 	unlockdisplay(display);
 	nbsendul(drawc, 1);
-	viewdone = 0;
 }
 
 void
