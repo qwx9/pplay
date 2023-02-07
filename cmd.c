@@ -40,7 +40,7 @@ setrange(usize from, usize to)
 	dot.to = to;
 	if(dot.pos < from || dot.pos >= to)
 		dot.pos = from;
-	dot.at = -1ULL;
+	dot.at = -1;
 }
 
 int
@@ -132,7 +132,7 @@ insert(char *, Chunk *c)
 		fprint(2, "insert: nothing to paste\n");
 		return -1;
 	}
-	if(dot.at == -1ULL){
+	if(dot.at == -1){
 		fprint(2, "insert: nowhere to paste\n");
 		return -1;
 	}
@@ -146,7 +146,7 @@ insert(char *, Chunk *c)
 	}
 	setdot(&dot, nil);
 	dot.pos = c2p(left->right);
-	dot.at = -1ULL;
+	dot.at = -1;
 	dprint(nil, "end\n");
 	return 1;
 }

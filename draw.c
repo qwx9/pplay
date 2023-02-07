@@ -184,7 +184,7 @@ drawstat(void)
 		seprint(s, s+sizeof s, " ↺ %τ - %τ", dot.from, dot.to);
 		p = string(screen, p, col[Cloop], ZP, font, s);
 	}
-	if(dot.at != -1ULL){
+	if(dot.at != -1){
 		seprint(s, s+sizeof s, " ‡ %τ", dot.at);
 		p = string(screen, p, col[Cins], ZP, font, s);
 	}
