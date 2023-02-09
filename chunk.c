@@ -231,7 +231,7 @@ recalcsize(void)
 		dot.to = n;
 	if(dot.pos < dot.from || dot.pos > dot.to)
 		dot.pos = dot.from;
-	dot.at = -1ULL;
+	dot.at = dot.from;
 	dprint(nil, "final %Δ\n", &dot);
 	totalsz = n;
 }
@@ -271,7 +271,7 @@ setdot(Dot *dot, Chunk *right)
 		dot->to = c2p(norris->left) + norris->left->len;
 	else
 		dot->to = c2p(right);
-	dot->at = -1ULL;
+	dot->at = dot->from;
 }
 
 void

@@ -184,7 +184,7 @@ drawstat(void)
 		seprint(s, s+sizeof s, " ↺ %τ - %τ", dot.from, dot.to);
 		p = string(screen, p, col[Cloop], ZP, font, s);
 	}
-	if(dot.at != -1){
+	if(dot.at != dot.from && dot.at != dot.to){
 		seprint(s, s+sizeof s, " ‡ %τ", dot.at);
 		p = string(screen, p, col[Cins], ZP, font, s);
 	}
@@ -198,7 +198,8 @@ drawview(void)
 		drawchunks();
 	drawpos(dot.from, col[Cloop]);
 	drawpos(dot.to, col[Cloop]);
-	drawpos(dot.at, col[Cins]);
+	if(dot.at != dot.from && dot.at != dot.to)
+		drawpos(dot.at, col[Cins]);
 }
 
 void
