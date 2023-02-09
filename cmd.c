@@ -107,17 +107,19 @@ static int
 replace(char *, Chunk *c)
 {
 	Chunk *left, *latch;
+	usize n;
 
 	if(c == nil){
 		fprint(2, "replace: nothing to paste\n");
 		return -1;
 	}
+	n = chunklen(c);
 	if((left = inserton(dot.from, dot.to, c, &latch)) == nil){
 		fprint(2, "insert: %r\n");
 		return -1;
 	}
 	pushop(OPdel, dot.from, dot.to, latch);
-	pushop(OPins, dot.from, dot.to, nil);
+	pushop(OPins, dot.from, dot.from+n, nil);
 	setdot(&dot, nil);
 	dot.pos = c2p(left->right);
 	return 1;
