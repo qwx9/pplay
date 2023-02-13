@@ -375,7 +375,7 @@ initdrw(int fuckit)
 		sysfatal("initdraw: %r");
 	display->locking = 1;
 	unlockdisplay(display);
-	if(fuckit){
+	if(!fuckit){
 		col[Cbg] = eallocimage(Rect(0,0,1,1), 1, 0xFFFFEAFF);
 		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, DBlack);
 		col[Ctext] = display->black;
