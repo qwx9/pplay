@@ -31,7 +31,7 @@ is specified.
 Turn verbose debugging info on immediately
 .TP
 .B -b
-Use inverted colors (light background)
+Use inverted colors (dark background)
 .TP
 .B -c
 Write audio to standard out instead of
