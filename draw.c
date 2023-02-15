@@ -24,7 +24,8 @@ static Image *viewbg, *view;
 static Rectangle liner;
 static Point statp;
 static usize views, viewe, viewmax;
-static int bgscalyl, bgscalyr, bgscalf;
+static int bgscalyl, bgscalyr;
+static double bgscalf;
 static Channel *drawc;
 static usize T;
 static int sampwidth = 1;
@@ -344,7 +345,7 @@ resetdraw(void)
 	liner.max.x = x + 1;
 	bgscalyl = (viewr.max.y - font->height) / (stereo ? 4 : 2);
 	bgscalyr = viewr.max.y - bgscalyl;
-	bgscalf = 32767 / bgscalyl;
+	bgscalf = 32767. / bgscalyl;
 }
 
 void
