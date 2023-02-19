@@ -1,7 +1,10 @@
 </$objtype/mkfile
 BIN=/$objtype/bin/audio
 MAN=/sys/man/1
-TARG=pplay
+TARG=\
+	pcmmix\
+	pplay\
+
 OFILES=\
 	chunk.$O\
 	cmd.$O\
@@ -10,4 +13,7 @@ OFILES=\
 	util.$O\
 
 HFILES=dat.h fns.h
-</sys/src/cmd/mkone
+</sys/src/cmd/mkmany
+
+$O.pcmmix: pcmmix.$O
+	$LD $LDFLAGS -o $target pcmmix.$O
