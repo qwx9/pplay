@@ -11,7 +11,7 @@ struct File{
 void
 usage(void)
 {
-	fprint(2, "usage: %s [-f] [FILE..]\n", argv0);
+	fprint(2, "usage: %s [-f factor] [FILE..]\n", argv0);
 	exits("usage");
 }
 
@@ -36,10 +36,12 @@ main(int argc, char **argv)
 		sysfatal("mallocz: %r");
 	fp = ftab;
 	fp->path = "stdin";
-	if((d = dirfstat(0)) == nil)
-		sysfatal("dirfstat: %r");
-	fp->fd = d->length > 0 ? 0 : -1;
-	free(d);
+	if(nf > 1){
+		if((d = dirfstat(0)) == nil)
+			sysfatal("dirfstat: %r");
+		fp->fd = d->length > 0 ? 0 : -1;
+		free(d);
+	}
 	fp++;
 	while(*argv != nil){
 		if((fp->fd = open(*argv, OREAD)) < 0)
