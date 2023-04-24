@@ -12,6 +12,25 @@ struct Buf{
 };
 static Chunk *norris;
 
+// FIXME: crazy idea, multisnarf with addressable elements; $n registers; fork pplay to display them → ?
+
+typedef struct Op Op;
+struct Op{
+	Chunk *p1;
+	Chunk *p2;
+	Chunk *l;
+	Chunk *r;
+};
+static Op *opbuf, *ophead, *opend;
+static usize opbufsz;
+
+static struct{
+	Chunk *from;
+	usize foff;
+	Chunk *to;
+	usize toff;
+} hold;
+
 int
 Δfmt(Fmt *fmt)
 {
@@ -20,8 +39,8 @@ int
 	d = va_arg(fmt->args, Dot*);
 	if(d == nil)
 		return fmtstrcpy(fmt, "[??:??:??:??]");
-	return fmtprint(fmt, "[from=%08zux cur=%08zux at=%08zux to=%08zux]",
-		d->from, d->pos, d->at, d->to);
+	return fmtprint(fmt, "[from=%08zux cur=%08zux to=%08zux]",
+		d->from, d->pos, d->to);
 }
 
 int
@@ -76,7 +95,7 @@ newchunk(Buf *b)
 	c->left = c;
 	c->right = c;
 	c->b = b;
-	c->off = 0;
+	c->boff = 0;
 	c->len = b->bufsz;
 	incref(&b->Ref);
 	return c;
@@ -117,12 +136,12 @@ clonechunk(Chunk *c)
 
 	assert(c != nil && c->b != nil);
 	nc = newchunk(c->b);
-	nc->off = c->off;
+	nc->boff = c->boff;
 	nc->len = c->len;
 	incref(c->b);
 	return nc;
 }
-Chunk *
+static Chunk *
 clone(Chunk *left, Chunk *right)
 {
 	Chunk *cl, *c, *nc;
@@ -136,6 +155,19 @@ clone(Chunk *left, Chunk *right)
 		c = nc;
 	}
 	return cl;
+}
+static Chunk *
+splitchunk(Chunk *p, usize from, usize to)
+{
+	Chunk *c;
+
+	assert(from < p->len);
+	assert(to > 0 && to - from <= p->len);
+	c = clonechunk(p);
+	c->boff += from;
+	c->len = to - from;
+	c->left = c->right = c;
+	return c;
 }
 
 static void
@@ -170,21 +202,8 @@ freechain(Chunk *c)
 	freechunk(c);
 }
 
-static void
-shrinkbuf(Chunk *c, usize newsz)
-{
-	Buf *b;
-
-	b = c->b;
-	assert(b != nil);
-	assert(newsz < b->bufsz && newsz > 0);
-	if(c->off + c->len > newsz)
-		c->len = newsz - c->off;
-	b->buf = erealloc(b->buf, newsz, b->bufsz);
-}
-
 usize
-chunklen(Chunk *c)
+chainlen(Chunk *c)
 {
 	usize n;
 	Chunk *cp;
@@ -210,257 +229,271 @@ p2c(usize p, usize *off)
 		*off = p;
 	return c;
 }
-usize
-c2p(Chunk *tc)
-{
-	Chunk *c;
-	usize p;
 
-	for(p=0, c=norris; c!=tc; c=c->right)
-		p += c->len;
-	return p;
+static void
+forgetop(Op *op)
+{
+	freechain(op->l);
 }
 
-void
-recalcsize(void)
-{
-	int n;
-
-	n = c2p(norris->left) + norris->left->len;
-	if(dot.to == totalsz || dot.to > n)
-		dot.to = n;
-	if(dot.pos < dot.from || dot.pos > dot.to)
-		dot.pos = dot.from;
-	dot.at = dot.from;
-	dprint(nil, "final %Δ\n", &dot);
-	totalsz = n;
-}
-
-#define ASSERT(x) {if(!(x)) printchunks(norris); assert((x)); }
-void
-paranoia(int exact)
-{
-	usize n;
-	Chunk *c, *pc;
-	Buf *b;
-
-	ASSERT(dot.pos >= dot.from && dot.pos < dot.to);
-	for(pc=norris, n=pc->len, c=pc->right; c!=norris; pc=c, c=c->right){
-		b = c->b;
-		ASSERT(b != nil);
-		ASSERT((b->bufsz & 3) == 0 && b->bufsz >= Sampsz);
-		ASSERT(c->off < b->bufsz);
-		ASSERT(c->len > Sampsz);
-		ASSERT(c->off + c->len <= b->bufsz);
-		ASSERT(c->left == pc);
-		n += c->len;
-	}
-	if(exact){
-		ASSERT(n <= totalsz);
-		ASSERT(dot.to <= totalsz);
-	}
-}
-#undef ASSERT
-
-/* FIXME: should set .pos as well? or just bounds? s/setdot/setbounds/? */
-void
-setdot(Dot *dot, Chunk *right)
-{
-	dot->from = 0;
-	if(right == nil)
-		dot->to = c2p(norris->left) + norris->left->len;
-	else
-		dot->to = c2p(right);
-	dot->at = dot->from;
-}
-
-void
-fixroot(Chunk *rc, usize off)
-{
-	Chunk *c;
-
-	dprint(rc, "fixroot [%χ] %08zux\n", rc, off);
-	for(c=rc->left; off>0; off-=c->len, c=c->left){
-		if(off - c->len == 0)
-			break;
-		assert(off - c->len < off);
-	}
-	norris = c;
-}
-
-Chunk *
-splitchunk(Chunk *c, usize off)
-{
-	Chunk *nc;
-
-	dprint(nil, "splitchunk %Δ [%χ] off=%08zux\n", &dot, c, off);
-	if(off == 0 || c == norris->left && off == c->len)
-		return c;
-	assert(off <= c->len);
-	nc = clonechunk(c);
-	nc->off = c->off + off;
-	nc->len = c->len - off;
-	c->len = off;
-	linkchunk(c, nc);
-	return nc;
-}
-
-/* c1 [nc … c2] nc */
 int
-splitrange(usize from, usize to, Chunk **left, Chunk **right)
+unpop(char *)
 {
-	usize off;
-	Chunk *c;
+	Op *op;
 
-	dprint(nil, "splitrange from=%08zux to=%08zux\n", from, to);
-	c = p2c(from, &off);
-	if(off > 0){
-		splitchunk(c, off);
-		*left = c->right;
-	}else
-		*left = c;	/* dangerous in combination with *right */
-	c = p2c(to, &off);
-	if(off < c->len - 1){
-		splitchunk(c, off);
-		*right = c;
-	}else
-		*right = c;
+	if(opend == opbuf || ophead == opend)
+		return 0;
+	op = ophead++;
+	dprint(op->p1, "cmd/unpop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n",
+		&dot, op->p1, op->p2, op->l, op->r);
+	totalsz += chainlen(op->l);
+	linkchunk(op->p1->left, op->l);
+	unlink(op->p1, op->p2);
+	totalsz -= chainlen(op->p1);
+	if(norris == op->p1)
+		norris = op->l;
+	dot.from = dot.pos = 0;
+	dot.to = totalsz;
+	return 1;
+}
+
+int
+popop(char *)
+{
+	Op *op;
+
+	if(ophead == opbuf)
+		return 0;
+	op = --ophead;
+	dprint(op->l, "cmd/pop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n",
+		&dot, op->p1, op->p2, op->l, op->r);
+	totalsz += chainlen(op->p1);
+	linkchunk(op->l->left, op->p1);
+	unlink(op->l, op->r);
+	totalsz -= chainlen(op->l);
+	if(norris == op->l)
+		norris = op->p1;
+	dot.from = dot.pos = 0;
+	dot.to = totalsz;
+	return 1;
+}
+
+static void
+pushop(Chunk *p1, Chunk *p2, Chunk *l, Chunk *r)
+{
+	Op *op;
+
+	if(ophead == opbuf + opbufsz){
+		opbuf = erealloc(opbuf,
+			(opbufsz + 1024) * sizeof *opbuf,
+			opbufsz * sizeof *opbuf);
+		ophead = opbuf + opbufsz;
+		opend = ophead;
+		opbufsz += 1024;
+	}
+	if(opend > ophead){
+		for(op=ophead; op<opend; op++)
+			forgetop(op);
+		memset(ophead, 0, (opend - ophead) * sizeof *ophead);
+	}
+	*ophead++ = (Op){p1, p2, l, r};
+	opend = ophead;
+}
+
+void
+ccrop(usize from, usize to)
+{
+	usize n, off;
+	Chunk *p1, *p2, *l, *r;
+
+	assert(from < to && to <= totalsz);
+	p1 = p2c(from, &off);
+	l = splitchunk(p1, off, p1->len);
+	p2 = p2c(to, &off);
+	r = splitchunk(p2, 0, off);
+	linkchunk(p1, l);
+	linkchunk(p2->left, r);
+	unlink(p2, p1);
+	n = chainlen(l);
+	totalsz = n;
+	pushop(p2, p1, r, l);
+	norris = l;
+	dot.pos -= dot.from;
+	dot.from = 0;
+	dot.to = n;
+}
+
+static int
+creplace(usize from, usize to, Chunk *c)
+{
+	usize n, off;
+	Chunk *p1, *p2, *l, *r;
+
+	assert(from > 0 && from < to && to <= totalsz);
+	p1 = p2c(from, &off);
+	l = splitchunk(p1, 0, off);
+	p2 = p2c(to, &off);
+	r = splitchunk(p2, off, p2->len);
+	linkchunk(c, r);
+	linkchunk(l, c);
+	n = chainlen(l);
+	totalsz += n;
+	linkchunk(p1->left, l);
+	unlink(p1, p2);
+	totalsz -= chainlen(p1);
+	pushop(p1, p2, l, r);
+	if(p1 == norris)
+		norris = l;
+	dot.to = dot.from + n;
+	dot.pos = from;
 	return 0;
 }
 
-Chunk *
-cutrange(usize from, usize to, Chunk **latch)
+// FIXME: use a specific Dot (prep for multibuf); generalize
+static int
+cinsert(usize pos, Chunk *c)
 {
-	Chunk *c, *left, *right;
+	usize n, off;
+	Chunk *p, *l, *r;
 
-	dprint(nil, "cutrange from=%08zux to=%08zux\n", from, to);
-	if(splitrange(from, to, &left, &right) < 0)
-		return nil;
-	c = left->left;
-	if(left == norris)
-		norris = right->right;
-	unlink(left, right);
-	if(latch != nil)
-		*latch = left;
-	return c;
+	assert(pos <= totalsz);
+	p = p2c(pos, &off);
+	l = splitchunk(p, 0, off);
+	r = splitchunk(p, off, p->len);
+	linkchunk(c, r);
+	linkchunk(l, c);
+	n = chainlen(l);
+	totalsz += n;
+	linkchunk(p->left, l);
+	unlink(p, p);
+	totalsz -= chainlen(p);
+	pushop(p, p, l, r);
+	if(p == norris)
+		norris = l;
+	dot.to = dot.from + n;
+	dot.pos = pos;
+	return 0;
 }
 
-Chunk *
-croprange(usize from, usize to, Chunk **latch)
+int
+cpaste(usize from, usize to)
 {
-	Chunk *cut, *left, *right;
+	Chunk *p1, *p2, *l, *r;
 
-	dprint(nil, "croprange from=%08zux to=%08zux\n", from, to);
-	if(splitrange(from, to, &left, &right) < 0)
-		return nil;
-	norris = left;
-	cut = right->right;
-	if(latch != nil)
-		*latch = cut;
-	unlink(right->right, left->left);
-	return left;
-}
-
-// FIXME: generalized insert(from, to), where from and to not necessarily distinct
-Chunk *
-inserton(usize from, usize to, Chunk *c, Chunk **latch)
-{
-	Chunk *left;
-
-	dprint(c, "inserton from=%08zux to=%08zux\n", from, to);
-	left = cutrange(from, to, latch);
-	linkchunk(left, c);
-	if(from == 0)
-		norris = c;
-	dprint(nil, "done\n");
-	return left;
-}
-
-Chunk *
-insertat(usize pos, Chunk *c)
-{
-	usize off;
-	Chunk *left;
-
-	dprint(c, "insertat cur=%08zux\n", pos);
-	if(pos == 0){
-		left = norris->left;
-		norris = c;
-	}else{
-		left = p2c(pos, &off);
-		splitchunk(left, off);
+	if(hold.from == nil || hold.to == nil){
+		werrstr("cpaste: nothing to paste");
+		return -1;
 	}
-	if(off == 0)
-		left = left->left;
-	linkchunk(left, c);
-	return left;
+	p1 = hold.from;
+	p2 = hold.to;
+	if(p1 == p2)
+		l = splitchunk(p1, hold.foff, hold.toff);
+	else{
+		l = splitchunk(p1, hold.foff, p1->len);
+		r = splitchunk(p2, 0, hold.toff);
+		if(p1->right != p2)
+			linkchunk(l, clone(p1->right, p2->left));
+		linkchunk(l->left, r);
+	}
+	return from == to ? cinsert(from, l) : creplace(from, to, l);
+}
+
+void
+ccopy(usize from, usize to)
+{
+	hold.from = p2c(from, &hold.foff);
+	hold.to = p2c(to, &hold.toff);
+}
+
+void
+chold(Chunk *c)
+{
+	hold.from = hold.to = c;
+	hold.foff = hold.toff = 0;
+}
+
+void
+ccut(usize from, usize to)
+{
+	usize n;
+	Chunk *p1, *p2, *l, *r;
+
+	assert(from > 0 && from < to && to <= totalsz);
+	ccopy(from, to);
+	p1 = hold.from;
+	r = splitchunk(p1, 0, hold.foff);
+	p2 = hold.to;
+	l = splitchunk(p2, hold.toff, p2->len);
+	linkchunk(l, r);
+	n = chainlen(l);
+	totalsz += n;
+	linkchunk(p1->left, l);
+	unlink(p1, p2);
+	totalsz -= chainlen(p1);
+	pushop(p1, p2, l, r);
+	if(p1 == norris)
+		norris = l;
+	dot.from = 0;
+	dot.to = n;
+	dot.pos = from;
 }
 
 uchar *
-getslice(Dot *d, usize n, usize *sz)
+getslice(Dot *d, usize want, usize *have)
 {
-	usize Δbuf, Δloop, off;
+	usize n, off;
 	Chunk *c;
 
 	if(d->pos >= totalsz){
 		werrstr("out of bounds");
-		*sz = 0;
+		*have = 0;
 		return nil;
 	}
 	c = p2c(d->pos, &off);
-	Δloop = d->to - d->pos;
-	Δbuf = c->len - off;
-	if(n < Δloop && n < Δbuf){
-		*sz = n;
-		d->pos += n;
-	}else if(Δloop <= Δbuf){
-		*sz = Δloop;
-		d->pos = d->from;
-	}else{
-		*sz = Δbuf;
-		d->pos += Δbuf;
-	}
-	return c->b->buf + c->off + off;
+	n = c->len - off;
+	*have = want > n ? n : want;
+	return c->b->buf + c->boff + off;
 }
 
 Chunk *
-readintochunks(int fd)
+chunkfile(int fd)
 {
 	int n;
-	usize m;
-	Chunk *rc, *c, *nc;
+	Chunk *c;
+	Buf *b;
 
-	for(m=0, rc=c=nil;; m+=n){
-		nc = newbuf(Iochunksz);
-		if(rc == nil)
-			rc = nc;
-		else
-			linkchunk(c, nc);
-		c = nc;
-		if((n = readn(fd, c->b->buf, Iochunksz)) < Iochunksz)
+	c = newbuf(Chunksz);
+	b = c->b;
+	for(;;){
+		if(b->bufsz - c->len < Chunksz){
+			b->buf = erealloc(c->b->buf, 2 * c->b->bufsz, c->b->bufsz);
+			b->bufsz *= 2;
+		}
+		if((n = readn(fd, b->buf + c->len, Chunksz)) < Chunksz)
 			break;
+		c->len += n;
 		yield();
 	}
-	close(fd);
-	if(n < 0)
-		fprint(2, "readintochunks: %r\n");
-	else if(n == 0){
-		if(c != rc)
-			unlink(c, c);
+	if(n < 0){
+		fprint(2, "chunkfile: %r\n");
 		freechunk(c);
-		if(c == rc){
-			werrstr("readintochunks: nothing read");
-			return nil;
-		}
-	}else if(n > 0 && n < Iochunksz)
-		shrinkbuf(c, n);
-	return rc;
+		return nil;
+	}else if(c->len == 0){
+		fprint(2, "chunkfile: nothing read\n");
+		freechunk(c);
+		return nil;
+	}else if(c->len < b->bufsz){
+		b->buf = erealloc(b->buf, c->len, b->bufsz);
+		b->bufsz = c->len;
+	}
+	return c;
 }
 
 void
-graphfrom(Chunk *c)
+initbuf(Chunk *c)
 {
 	norris = c;
-	recalcsize();
-	setdot(&dot, nil);
+	totalsz = chainlen(c);
+	dot.pos = dot.from = 0;
+	dot.to = totalsz;
 }

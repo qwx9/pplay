@@ -8,6 +8,7 @@
 QLock lsync;
 int debugdraw;
 int viewdone;
+vlong latchedpos;
 
 enum{
 	Cbg,
@@ -129,12 +130,12 @@ again:
 			lmin = lmax = 0;
 			rmin = rmax = 0;
 			while(n > 0){
-				p = getslice(&d, n, &k);
-				if(p == nil){
+				if((p = getslice(&d, n, &k)) == nil){
 					if(k > 0)
 						fprint(2, "getslice: %r\n");
 					goto end;
 				}
+				d.pos += k;
 				e = p + k;
 				while(p < e){
 					s = (s16int)(p[1] << 8 | p[0]);
@@ -182,11 +183,11 @@ drawstat(void)
 	seprint(s, s+sizeof s, "T %zd @ %τ", T / Sampsz, dot.pos);
 	p = string(screen, statp, col[Ctext], ZP, font, s);
 	if(dot.from > 0 || dot.to < totalsz){
-		seprint(s, s+sizeof s, " ↺ %τ - %τ", dot.from, dot.to);
+		seprint(s, s+sizeof s, " ↺ %τ - %τ (%τ)", dot.from, dot.to, dot.to - dot.from);
 		p = string(screen, p, col[Cloop], ZP, font, s);
 	}
-	if(dot.at != dot.from && dot.at != dot.to){
-		seprint(s, s+sizeof s, " ‡ %τ", dot.at);
+	if(latchedpos >= 0){
+		seprint(s, s+sizeof s, " ‡ %τ", (usize)latchedpos);
 		p = string(screen, p, col[Cins], ZP, font, s);
 	}
 }
@@ -199,8 +200,8 @@ drawview(void)
 		drawchunks();
 	drawpos(dot.from, col[Cloop]);
 	drawpos(dot.to, col[Cloop]);
-	if(dot.at != dot.from && dot.at != dot.to)
-		drawpos(dot.at, col[Cins]);
+	if(latchedpos >= 0)
+		drawpos(latchedpos, col[Cins]);
 }
 
 void
@@ -289,6 +290,31 @@ setpage(int d)
 }
 
 void
+setrange(usize from, usize to)
+{
+	assert((from & 3) == 0);
+	assert((to & 3) == 0);
+	dot.from = from;
+	dot.to = to;
+	if(dot.pos < from || dot.pos >= to)
+		dot.pos = from;
+	latchedpos = -1;
+}
+
+static int
+setcur(usize off)
+{
+	if(off < dot.from || off > dot.to - Outsz){
+		werrstr("cannot jump outside of loop bounds\n");
+		return -1;
+	}
+	dot.pos = off;
+	latchedpos = off;
+	update();
+	return 0;
+}
+
+void
 setloop(vlong off)
 {
 	off *= T;
@@ -299,15 +325,6 @@ setloop(vlong off)
 		setrange(off, dot.to);
 	else
 		setrange(dot.from, off);
-	update();
-}
-
-static void
-setcur(usize off)
-{
-	if(off < dot.from || off > dot.to - Outsz)
-		return;
-	jump(off);
 	update();
 }
 

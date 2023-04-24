@@ -8,12 +8,12 @@ enum{
 	WriteDelay = Rate / WriteRate,	/* 1764 default delay */
 	Sampsz = 2 * 2,
 	Outsz = WriteDelay * Sampsz,
-	Iochunksz = 4*1024*1024,	/* ≈ 24 sec. at 44.1 kHz */
+	Chunksz = Sampsz * Rate,
 };
 #pragma incomplete Buf
 struct Chunk{
 	Buf *b;
-	usize off;
+	usize boff;
 	usize len;
 	Chunk *left;
 	Chunk *right;
@@ -21,13 +21,15 @@ struct Chunk{
 extern struct Dot{
 	usize pos;
 	usize from;
-	usize at;
 	usize to;
 };
 extern Dot dot;
+extern vlong latchedpos;
 extern usize totalsz;
 extern int treadsoftly;
 extern int viewdone;
+
+extern QLock lsync;
 
 extern int stereo;
 extern int debug;

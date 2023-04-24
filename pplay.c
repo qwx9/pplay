@@ -16,25 +16,24 @@ static Keyboardctl *kc;
 static Mousectl *mc;
 static int cat;
 static int afd = -1;
-static uchar sbuf[Iochunksz];
 
 static void
 athread(void *)
 {
 	int nerr;
-	vlong n;
+	uchar *b;
+	usize n;
 
 	nerr = 0;
 	for(;;){
 		if(afd < 0 || nerr > 10)
 			return;
-		n = getbuf(dot, Outsz, sbuf, sizeof sbuf);
-		if(n < 0){
+		if((b = getslice(&dot, Outsz, &n)) == nil || n <= 0){
 			fprint(2, "athread: %r\n");
 			nerr++;
 			continue;
 		}
-		if(write(afd, sbuf, n) != n){
+		if(write(afd, b, n) != n){
 			fprint(2, "athread write: %r (nerr %d)\n", nerr);
 			break;
 		}
@@ -164,12 +163,12 @@ threadmain(int argc, char **argv)
 			case Kleft: setpage(-1); break;
 			case Kright: setpage(1); break;
 			default:
-				if(treadsoftly){
-					fprint(2, "dropping edit event during ongoing read\n");
-					break;
-				}
 				if((p = prompt(r)) == nil || strlen(p) == 0)
 					break;
+				if(treadsoftly){
+					fprint(2, "dropping edit command during ongoing read\n");
+					break;
+				}
 				qlock(&lsync);
 				switch(cmd(p)){
 				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); update(); break;
