@@ -161,8 +161,8 @@ splitchunk(Chunk *p, usize from, usize to)
 {
 	Chunk *c;
 
-	assert(from < p->len);
-	assert(to > 0 && to - from <= p->len);
+	/* 0-size chunks are permitted */
+	assert(to <= p->len && to - from <= p->len);
 	c = clonechunk(p);
 	c->boff += from;
 	c->len = to - from;
@@ -213,6 +213,19 @@ chainlen(Chunk *c)
 	return n;
 }
 
+void
+checksz(void)
+{
+	usize n;
+
+	n = chainlen(norris);
+	fprint(2, "totalsz %zd %Δ :: chainlen %zd\n", totalsz, &dot, n);
+	assert(n == totalsz);
+	assert(dot.from < dot.to);
+	assert(dot.from <= totalsz);
+	assert(dot.pos >= dot.from && dot.pos < dot.to);
+}
+
 Chunk *
 p2c(usize p, usize *off)
 {
@@ -254,6 +267,7 @@ unpop(char *)
 		norris = op->l;
 	dot.from = dot.pos = 0;
 	dot.to = totalsz;
+	latchedpos = -1;
 	return 1;
 }
 
@@ -275,6 +289,7 @@ popop(char *)
 		norris = op->p1;
 	dot.from = dot.pos = 0;
 	dot.to = totalsz;
+	latchedpos = -1;
 	return 1;
 }
 
@@ -307,20 +322,32 @@ ccrop(usize from, usize to)
 	Chunk *p1, *p2, *l, *r;
 
 	assert(from < to && to <= totalsz);
+
 	p1 = p2c(from, &off);
-	l = splitchunk(p1, off, p1->len);
-	p2 = p2c(to, &off);
-	r = splitchunk(p2, 0, off);
+	if(p1->len - off >= to - from){
+		l = splitchunk(p1, off, off);
+		p2 = p1;
+		r = splitchunk(p2, off, off + to - from);
+		if(p1 != norris)
+			p1 = p1->left;
+		else
+			p2 = p2->right;
+	}else{
+		p1 = p2c(from, &off);
+		l = splitchunk(p1, off, p1->len);
+		p2 = p2c(to, &off);
+		r = splitchunk(p2, 0, off);
+	}
 	linkchunk(p1, l);
 	linkchunk(p2->left, r);
 	unlink(p2, p1);
 	n = chainlen(l);
 	totalsz = n;
-	pushop(p2, p1, r, l);
+	pushop(p1, p2, l, r);
 	norris = l;
-	dot.pos -= dot.from;
-	dot.from = 0;
+	dot.from = dot.pos = 0;
 	dot.to = n;
+	latchedpos = -1;
 }
 
 static int
@@ -329,7 +356,7 @@ creplace(usize from, usize to, Chunk *c)
 	usize n, off;
 	Chunk *p1, *p2, *l, *r;
 
-	assert(from > 0 && from < to && to <= totalsz);
+	assert(from < to && to <= totalsz);
 	p1 = p2c(from, &off);
 	l = splitchunk(p1, 0, off);
 	p2 = p2c(to, &off);
@@ -344,8 +371,9 @@ creplace(usize from, usize to, Chunk *c)
 	pushop(p1, p2, l, r);
 	if(p1 == norris)
 		norris = l;
-	dot.to = dot.from + n;
-	dot.pos = from;
+	dot.from = dot.pos = from;
+	dot.to = from + n;
+	latchedpos = -1;
 	return 0;
 }
 
@@ -370,8 +398,9 @@ cinsert(usize pos, Chunk *c)
 	pushop(p, p, l, r);
 	if(p == norris)
 		norris = l;
-	dot.to = dot.from + n;
-	dot.pos = pos;
+	dot.from = dot.pos = pos;
+	dot.to = pos + n;
+	latchedpos = -1;
 	return 0;
 }
 
@@ -418,12 +447,16 @@ ccut(usize from, usize to)
 	usize n;
 	Chunk *p1, *p2, *l, *r;
 
-	assert(from > 0 && from < to && to <= totalsz);
+	if(from - to == totalsz){
+		fprint(2, "ccut: not cutting entire buffer\n");
+		return;
+	}
+	assert(from < to && to <= totalsz);
 	ccopy(from, to);
 	p1 = hold.from;
-	r = splitchunk(p1, 0, hold.foff);
 	p2 = hold.to;
-	l = splitchunk(p2, hold.toff, p2->len);
+	l = splitchunk(p1, 0, hold.foff);
+	r = splitchunk(p2, hold.toff, p2->len);
 	linkchunk(l, r);
 	n = chainlen(l);
 	totalsz += n;
@@ -433,9 +466,9 @@ ccut(usize from, usize to)
 	pushop(p1, p2, l, r);
 	if(p1 == norris)
 		norris = l;
-	dot.from = 0;
-	dot.to = n;
-	dot.pos = from;
+	dot.from = dot.pos = from;
+	dot.to = totalsz;
+	latchedpos = -1;
 }
 
 uchar *

@@ -19,6 +19,7 @@ paste(char *)
 	to = dot.to;
 	if(latchedpos >= 0 && dot.from == 0 && dot.to == totalsz)
 		to = from = latchedpos;
+	latchedpos = -1;
 	return cpaste(from, to) == 0 ? 1 : -1;
 }
 
@@ -240,6 +241,8 @@ cmd(char *s)
 	case 'x': x = crop(s); break;
 	default: werrstr("unknown command %C", r); x = -1; break;
 	}
+	if(debug)
+		checksz();
 	return x;
 }
 

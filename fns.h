@@ -1,4 +1,5 @@
 void	dprint(Chunk*, char*, ...);
+void	checksz(void);
 void	freechain(Chunk*);
 int	unpop(char*);
 int	popop(char*);
