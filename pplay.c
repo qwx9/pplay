@@ -20,7 +20,7 @@ static int afd = -1;
 static void
 athread(void *)
 {
-	int nerr;
+	int m, nerr;
 	uchar *b;
 	usize n;
 
@@ -28,18 +28,21 @@ athread(void *)
 	for(;;){
 		if(afd < 0 || nerr > 10)
 			return;
-		if((b = getslice(&dot, Outsz, &n)) == nil || n <= 0){
-			fprint(2, "athread: %r\n");
-			nerr++;
-			continue;
-		}
-		if(write(afd, b, n) != n){
-			fprint(2, "athread write: %r (nerr %d)\n", nerr);
-			break;
+		for(m=Outsz; m>0; m-=n){
+			if((b = getslice(&dot, Outsz, &n)) == nil || n <= 0){
+				fprint(2, "athread: %r\n");
+				nerr++;
+				goto skip;
+			}
+			if(write(afd, b, n) != n){
+				fprint(2, "athread write: %r\n");
+				threadexits("write");
+			}
 		}
 		nerr = 0;
 		advance(&dot, n);
 		update();
+skip:
 		yield();
 	}
 }
