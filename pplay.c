@@ -39,6 +39,7 @@ athread(void *)
 		}
 		nerr = 0;
 		advance(&dot, n);
+		update();
 		yield();
 	}
 }
