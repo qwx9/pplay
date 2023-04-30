@@ -27,7 +27,6 @@ extern Dot dot;
 extern vlong latchedpos;
 extern usize totalsz;
 extern int treadsoftly;
-extern int viewdone;
 
 extern QLock lsync;
 

@@ -39,8 +39,6 @@ athread(void *)
 		}
 		nerr = 0;
 		advance(&dot, n);
-		if(viewdone)
-			update();
 		yield();
 	}
 }

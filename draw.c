@@ -7,7 +7,6 @@
 
 QLock lsync;
 int debugdraw;
-int viewdone;
 vlong latchedpos;
 
 enum{
@@ -168,7 +167,6 @@ again:
 			if(x % 320 == 0)
 				update();
 		}
-		viewdone = 1;
 		update();
 		qunlock(&lsync);
 	}
@@ -210,8 +208,6 @@ update(void)
 	int x;
 	usize p;
 
-	if(!viewdone)
-		return;
 	p = dot.pos;
 	lockdisplay(display);
 	drawview();
@@ -381,7 +377,6 @@ redraw(int all)
 	viewe = views + span;
 	if(all)
 		resetdraw();
-	viewdone = 0;
 	unlockdisplay(display);
 	nbsendul(drawc, 1);
 }
