@@ -19,13 +19,16 @@ struct Chunk{
 	Chunk *right;
 };
 extern struct Dot{
-	usize pos;
+	usize cur;
 	usize from;
 	usize to;
+	usize off;
+	usize totalsz;
+	Chunk *norris;
 };
-extern Dot dot;
-extern vlong latchedpos;
-extern usize totalsz;
+extern Dot *dots, *current;
+extern usize ndots;
+
 extern int treadsoftly;
 
 extern QLock lsync;

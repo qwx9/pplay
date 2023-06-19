@@ -20,27 +20,28 @@ static int afd = -1;
 static void
 athread(void *)
 {
-	int m, nerr;
-	uchar *b;
-	usize n;
+	int nerr;
+	uchar *b, *bp, buf[Outsz];
+	usize n, m;
 
 	nerr = 0;
 	for(;;){
 		if(afd < 0 || nerr > 10)
 			return;
-		for(m=Outsz; m>0; m-=n){
-			if((b = getslice(&dot, Outsz, &n)) == nil || n <= 0){
+		for(bp=buf, m=sizeof buf; bp<buf+sizeof buf; bp+=n, m-=n){
+			if((b = getslice(current, m, &n)) == nil || n <= 0){
 				fprint(2, "athread: %r\n");
 				nerr++;
 				goto skip;
 			}
-			if(write(afd, b, n) != n){
-				fprint(2, "athread write: %r\n");
-				threadexits("write");
-			}
+			memcpy(bp, b, n);
+			advance(current, n);
+		}
+		if(write(afd, buf, sizeof buf) != sizeof buf){
+			fprint(2, "athread write: %r\n");
+			threadexits("write");
 		}
 		nerr = 0;
-		advance(&dot, n);
 		update();
 skip:
 		yield();
@@ -58,7 +59,7 @@ toggleplay(void)
 			play = 0;
 			return;
 		}
-		if(threadcreate(athread, nil, mainstacksize) < 0)
+		if(threadcreate(athread, nil, 2*mainstacksize) < 0)
 			sysfatal("threadcreate: %r");
 	}else{
 		if(!cat)
@@ -103,13 +104,13 @@ threadmain(int argc, char **argv)
 	case 'c': cat = 1; break;
 	default: usage();
 	}ARGEND
-	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
-		sysfatal("open: %r");
 	fmtinstall(L'Δ', Δfmt);
 	fmtinstall(L'χ', χfmt);
 	fmtinstall(L'τ', τfmt);
-	if(loadin(fd) < 0)
-		sysfatal("inittrack: %r");
+	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
+		sysfatal("open: %r");
+	if(initcmd(fd) < 0)
+		sysfatal("init: %r");
 	close(fd);
 	initdrw(notriob);
 	if((kc = initkeyboard(nil)) == nil)
@@ -123,7 +124,6 @@ threadmain(int argc, char **argv)
 		{kc->c, &r, CHANRCV},
 		{nil, nil, CHANEND}
 	};
-	initcmd();
 	if(setpri(13) < 0)
 		fprint(2, "setpri: %r\n");
 	toggleplay();
@@ -154,10 +154,10 @@ threadmain(int argc, char **argv)
 			case 'D': debug ^= 1; debugdraw ^= 1; break;
 			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
-			case 'b': setjump(dot.from); break;
-			case Kesc: setrange(0, totalsz); update(); break;
-			case '\n': zoominto(dot.from, dot.to); break;
-			case 'z': zoominto(0, totalsz); break;
+			case 'b': setjump(current->from); break;
+			case Kesc: setrange(0, current->totalsz); update(); break;
+			case '\n': zoominto(current->from, current->to); break;
+			case 'z': zoominto(0, current->totalsz); break;
 			case '-': setzoom(-1, 0); break;
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;

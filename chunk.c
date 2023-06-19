@@ -10,7 +10,6 @@ struct Buf{
 	usize bufsz;
 	Ref;
 };
-static Chunk *norris;
 
 // FIXME: crazy idea, multisnarf with addressable elements; $n registers; fork pplay to display them → ?
 
@@ -20,15 +19,14 @@ struct Op{
 	Chunk *p2;
 	Chunk *l;
 	Chunk *r;
+	Dot *dot;
 };
 static Op *opbuf, *ophead, *opend;
 static usize opbufsz;
 
 static struct{
-	Chunk *from;
-	usize foff;
-	Chunk *to;
-	usize toff;
+	Chunk *c;
+	Dot;
 } hold;
 
 int
@@ -39,8 +37,8 @@ int
 	d = va_arg(fmt->args, Dot*);
 	if(d == nil)
 		return fmtstrcpy(fmt, "[??:??:??:??]");
-	return fmtprint(fmt, "[from=%08zux cur=%08zux to=%08zux]",
-		d->from, d->pos, d->to);
+	return fmtprint(fmt, "[cur=%#p from=%08zux to=%08zux off=%08zux tot=%08zux]",
+		d->norris, d->from, d->to, d->off, d->totalsz);
 }
 
 int
@@ -51,7 +49,7 @@ int
 	c = va_arg(fmt->args, Chunk*);
 	if(c == nil)
 		return fmtstrcpy(fmt, "[]");
-	return fmtprint(fmt, "0x%08p:%08zux::0x%08p:0x%08p", c, c->len, c->left, c->right);
+	return fmtprint(fmt, "0x%08p N=%08zux →L=0x%08p ←R=0x%08p", c, c->len, c->left, c->right);
 }
 
 static void
@@ -83,7 +81,8 @@ dprint(Chunk *c, char *fmt, ...)
 	vseprint(s, s+sizeof s, fmt, arg);
 	va_end(arg);
 	fprint(2, "%s", s);
-	printchunks(c == nil ? norris : c);
+	if(c != nil)
+		printchunks(c);
 }
 
 static Chunk *
@@ -95,8 +94,6 @@ newchunk(Buf *b)
 	c->left = c;
 	c->right = c;
 	c->b = b;
-	c->boff = 0;
-	c->len = b->bufsz;
 	incref(&b->Ref);
 	return c;
 }
@@ -213,26 +210,29 @@ chainlen(Chunk *c)
 	return n;
 }
 
-void
-checksz(void)
+static Dot
+newdot(Dot *dp)
 {
-	usize n;
+	Dot d = {0};
+	Chunk *c;
 
-	n = chainlen(norris);
-	fprint(2, "totalsz %zd %Δ :: chainlen %zd\n", totalsz, &dot, n);
-	assert(n == totalsz);
-	assert(dot.from < dot.to);
-	assert(dot.from <= totalsz);
-	assert(dot.pos >= dot.from && dot.pos < dot.to);
+	d.norris = dp->norris;
+	d.totalsz = d.norris->len;
+	/* paranoia */
+	for(c=d.norris->right; c!=d.norris; c=c->right)
+		d.totalsz += c->len;
+	d.cur = d.from = dp->from < d.totalsz ? dp->from : 0;
+	d.to = d.totalsz;
+	return d;
 }
 
 Chunk *
-p2c(usize p, usize *off)
+p2c(usize p, usize *off, Dot *d)
 {
 	Chunk *c;
 
-	for(c=norris; p>=c->len; c=c->right){
-		if(c == norris->left){
+	for(c=d->norris; p>=c->len; c=c->right){
+		if(c == d->norris->left){
 			assert(p == c->len);
 			break;
 		}
@@ -253,21 +253,19 @@ int
 unpop(char *)
 {
 	Op *op;
+	Dot *d;
 
 	if(opend == opbuf || ophead == opend)
 		return 0;
 	op = ophead++;
+	d = op->dot;
 	dprint(op->p1, "cmd/unpop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n",
-		&dot, op->p1, op->p2, op->l, op->r);
-	totalsz += chainlen(op->l);
+		d, op->p1, op->p2, op->l, op->r);
 	linkchunk(op->p1->left, op->l);
 	unlink(op->p1, op->p2);
-	totalsz -= chainlen(op->p1);
-	if(norris == op->p1)
-		norris = op->l;
-	dot.from = dot.pos = 0;
-	dot.to = totalsz;
-	latchedpos = -1;
+	if(d->norris == op->p1)
+		d->norris = op->l;
+	*d = newdot(d);
 	return 1;
 }
 
@@ -275,26 +273,24 @@ int
 popop(char *)
 {
 	Op *op;
+	Dot *d;
 
 	if(ophead == opbuf)
 		return 0;
 	op = --ophead;
+	d = op->dot;
 	dprint(op->l, "cmd/pop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n",
-		&dot, op->p1, op->p2, op->l, op->r);
-	totalsz += chainlen(op->p1);
+		d, op->p1, op->p2, op->l, op->r);
 	linkchunk(op->l->left, op->p1);
 	unlink(op->l, op->r);
-	totalsz -= chainlen(op->l);
-	if(norris == op->l)
-		norris = op->p1;
-	dot.from = dot.pos = 0;
-	dot.to = totalsz;
-	latchedpos = -1;
+	if(d->norris == op->l)
+		d->norris = op->p1;
+	*d = newdot(d);
 	return 1;
 }
 
 static void
-pushop(Chunk *p1, Chunk *p2, Chunk *l, Chunk *r)
+pushop(Chunk *p1, Chunk *p2, Chunk *l, Chunk *r, Dot *d)
 {
 	Op *op;
 
@@ -311,164 +307,172 @@ pushop(Chunk *p1, Chunk *p2, Chunk *l, Chunk *r)
 			forgetop(op);
 		memset(ophead, 0, (opend - ophead) * sizeof *ophead);
 	}
-	*ophead++ = (Op){p1, p2, l, r};
+	*ophead++ = (Op){p1, p2, l, r, d};
 	opend = ophead;
 }
 
+/* ..[p1]..[p2].. → ..[p1|l]..[r|p2].. → [l]..[r]  */
 void
-ccrop(usize from, usize to)
+ccrop(Dot *d)
 {
-	usize n, off;
+	usize foff, toff;
 	Chunk *p1, *p2, *l, *r;
 
-	assert(from < to && to <= totalsz);
-
-	p1 = p2c(from, &off);
-	if(p1->len - off >= to - from){
-		l = splitchunk(p1, off, off);
-		p2 = p1;
-		r = splitchunk(p2, off, off + to - from);
-		if(p1 != norris)
-			p1 = p1->left;
-		else
-			p2 = p2->right;
-	}else{
-		p1 = p2c(from, &off);
-		l = splitchunk(p1, off, p1->len);
-		p2 = p2c(to, &off);
-		r = splitchunk(p2, 0, off);
+	if(d->to == d->from){
+		fprint(2, "empty crop\n");
+		return;
 	}
+	assert(d->from < d->to && d->to <= d->totalsz);
+	p1 = p2c(d->from, &foff, d);
+	p2 = p2c(d->to, &toff, d);
+	if(p1 == p2){
+		l = splitchunk(p1, foff, toff);
+		r = l;
+	}else{
+		l = splitchunk(p1, foff, p1->len);
+		r = splitchunk(p2, 0, toff);
+		if(p1->right != p2)
+			linkchunk(p2->left, r);
+		else
+			linkchunk(l, r);
+	}
+	dprint(d->norris, "ccrop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n", d, p1, p2, l, r);
 	linkchunk(p1, l);
-	linkchunk(p2->left, r);
 	unlink(p2, p1);
-	n = chainlen(l);
-	totalsz = n;
-	pushop(p1, p2, l, r);
-	norris = l;
-	dot.from = dot.pos = 0;
-	dot.to = n;
-	latchedpos = -1;
+	pushop(p1, p2, l, r, d);
+	d->norris = l;
+	*d = newdot(d);
 }
 
+/* [p1]..[p2] → [l|p1]..[p2|r] → [l]..c..[r]  */
 static int
-creplace(usize from, usize to, Chunk *c)
+creplace(Dot *d, Chunk *c)
 {
-	usize n, off;
+	usize foff, toff;
 	Chunk *p1, *p2, *l, *r;
 
-	assert(from < to && to <= totalsz);
-	p1 = p2c(from, &off);
-	l = splitchunk(p1, 0, off);
-	p2 = p2c(to, &off);
-	r = splitchunk(p2, off, p2->len);
-	linkchunk(c, r);
+	assert(d->from <= d->totalsz && d->to - d->from > 0);
+	p1 = p2c(d->from, &foff, d);
+	p2 = p2c(d->to, &toff, d);
+	l = splitchunk(p1, 0, foff);
+	r = splitchunk(p2, toff, p2->len);
 	linkchunk(l, c);
-	n = chainlen(l);
-	totalsz += n;
+	linkchunk(c, r);
+	dprint(d->norris, "creplace dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n", d, p1, p2, l, r);
 	linkchunk(p1->left, l);
 	unlink(p1, p2);
-	totalsz -= chainlen(p1);
-	pushop(p1, p2, l, r);
-	if(p1 == norris)
-		norris = l;
-	dot.from = dot.pos = from;
-	dot.to = from + n;
-	latchedpos = -1;
+	pushop(p1, p2, l, r, d);
+	if(p1 == d->norris)
+		d->norris = l;
+	*d = newdot(d);
 	return 0;
 }
 
-// FIXME: use a specific Dot (prep for multibuf); generalize
+/* ..[p1].. → ..[l|r].. → ..[l|c|r].. */
 static int
-cinsert(usize pos, Chunk *c)
+cinsert(Dot *d, Chunk *c)
 {
-	usize n, off;
-	Chunk *p, *l, *r;
+	usize off;
+	Chunk *p1, *l, *r;
 
-	assert(pos <= totalsz);
-	p = p2c(pos, &off);
-	l = splitchunk(p, 0, off);
-	r = splitchunk(p, off, p->len);
-	linkchunk(c, r);
+	assert(d->off != -1ULL);
+	p1 = p2c(d->off, &off, d);
+	l = splitchunk(p1, 0, off);
+	r = splitchunk(p1, off, p1->len);
 	linkchunk(l, c);
-	n = chainlen(l);
-	totalsz += n;
-	linkchunk(p->left, l);
-	unlink(p, p);
-	totalsz -= chainlen(p);
-	pushop(p, p, l, r);
-	if(p == norris)
-		norris = l;
-	dot.from = dot.pos = pos;
-	dot.to = pos + n;
-	latchedpos = -1;
+	linkchunk(c, r);
+	dprint(d->norris, "cinsert dot=%Δ P [%χ] LR [%χ][%χ]\n", d, p1, l, r);
+	linkchunk(p1->left, l);
+	unlink(p1, p1);
+	pushop(p1, p1, l, r, d);
+	if(p1 == d->norris)
+		d->norris = l;
+	d->from = d->off;
+	d->to = d->totalsz;
+	*d = newdot(d);
 	return 0;
 }
 
 int
-cpaste(usize from, usize to)
+cpaste(Dot *d)
 {
-	Chunk *p1, *p2, *l, *r;
+	Chunk *c;
 
-	if(hold.from == nil || hold.to == nil){
+	if(hold.c == nil){
 		werrstr("cpaste: nothing to paste");
 		return -1;
 	}
-	p1 = hold.from;
-	p2 = hold.to;
-	if(p1 == p2)
-		l = splitchunk(p1, hold.foff, hold.toff);
-	else{
-		l = splitchunk(p1, hold.foff, p1->len);
-		r = splitchunk(p2, 0, hold.toff);
+	dprint(d->norris, "cpaste dot=%Δ hold=%Δ\n", d, &hold.Dot);
+	c = clone(hold.c, hold.c->left);
+	return d->off == -1ULL ? creplace(d, c) : cinsert(d, c);
+}
+
+void
+chold(Chunk *c, Dot *d)
+{
+	if(hold.c != nil)
+		freechain(hold.c);
+	hold.c = c;
+	hold.Dot = *d;
+}
+
+/* [p1]..[x]..[p2] → [p1|l]..[x]..[r|p2] → hold = [l]..[x]..[r] */
+Chunk *
+ccopy(Dot *d)
+{
+	usize foff, toff;
+	Chunk *p1, *p2, *l, *r;
+
+	if(hold.c != nil)
+		freechain(hold.c);
+	p1 = p2c(d->from, &foff, d);
+	p2 = p2c(d->to, &toff, d);
+	if(p1 == p2){
+		l = splitchunk(p1, foff, toff);
+		r = nil;
+	}else{
+		l = splitchunk(p1, foff, p1->len);
+		r = splitchunk(p2, 0, toff);
 		if(p1->right != p2)
 			linkchunk(l, clone(p1->right, p2->left));
 		linkchunk(l->left, r);
 	}
-	return from == to ? cinsert(from, l) : creplace(from, to, l);
+	dprint(d->norris, "ccopy dot=%Δ\n\tP\t[ %χ ]\t[ %χ ]\n\tLR:\t[ %χ ]\t[ %χ ]\n",
+		d, p1, p2, l, p1 == p2 ? l : r);
+	hold.c = l;
+	hold.Dot = *d;
+	return hold.c;
 }
 
+/* [p1]..[x]..[p2] → [l|p1]..[x]..[p2|r] → [l][r] */
 void
-ccopy(usize from, usize to)
+ccut(Dot *d)
 {
-	hold.from = p2c(from, &hold.foff);
-	hold.to = p2c(to, &hold.toff);
-}
-
-void
-chold(Chunk *c)
-{
-	hold.from = hold.to = c;
-	hold.foff = hold.toff = 0;
-}
-
-void
-ccut(usize from, usize to)
-{
-	usize n;
+	usize off;
 	Chunk *p1, *p2, *l, *r;
 
-	if(from - to == totalsz){
+	if(d->from - d->to == d->totalsz){
 		fprint(2, "ccut: not cutting entire buffer\n");
 		return;
 	}
-	assert(from < to && to <= totalsz);
-	ccopy(from, to);
-	p1 = hold.from;
-	p2 = hold.to;
-	l = splitchunk(p1, 0, hold.foff);
-	r = splitchunk(p2, hold.toff, p2->len);
+	assert(d->from < d->to && d->to <= d->totalsz);
+	ccopy(d);
+	p1 = p2c(d->from, &off, d);
+	l = splitchunk(p1, 0, off);
+	if(d->from == d->to)
+		p2 = p1;
+	else
+		p2 = p2c(d->to, &off, d);
+	r = splitchunk(p2, off, p2->len);
 	linkchunk(l, r);
-	n = chainlen(l);
-	totalsz += n;
+	dprint(d->norris, "ccut dot=%Δ\n\tP\t[ %χ ]\t[ %χ ]\n\tLR:\t[ %χ ]\t[ %χ ]\n",
+		d, p1, p2, l, r);
 	linkchunk(p1->left, l);
 	unlink(p1, p2);
-	totalsz -= chainlen(p1);
-	pushop(p1, p2, l, r);
-	if(p1 == norris)
-		norris = l;
-	dot.from = dot.pos = from;
-	dot.to = totalsz;
-	latchedpos = -1;
+	pushop(p1, p2, l, r, d);
+	if(p1 == d->norris)
+		d->norris = l;
+	*d = newdot(d);
 }
 
 uchar *
@@ -477,19 +481,19 @@ getslice(Dot *d, usize want, usize *have)
 	usize n, off;
 	Chunk *c;
 
-	if(d->pos >= totalsz){
+	if(d->cur >= d->totalsz){
 		werrstr("out of bounds");
 		*have = 0;
 		return nil;
 	}
-	c = p2c(d->pos, &off);
+	c = p2c(d->cur, &off, d);
 	n = c->len - off;
 	*have = want > n ? n : want;
 	return c->b->buf + c->boff + off;
 }
 
 Chunk *
-chunkfile(int fd)
+loadfile(int fd, Dot *d)
 {
 	int n;
 	Chunk *c;
@@ -499,7 +503,7 @@ chunkfile(int fd)
 	b = c->b;
 	for(;;){
 		if(b->bufsz - c->len < Chunksz){
-			b->buf = erealloc(c->b->buf, 2 * c->b->bufsz, c->b->bufsz);
+			b->buf = erealloc(b->buf, 2 * b->bufsz, b->bufsz);
 			b->bufsz *= 2;
 		}
 		if((n = readn(fd, b->buf + c->len, Chunksz)) < Chunksz)
@@ -508,25 +512,20 @@ chunkfile(int fd)
 		yield();
 	}
 	if(n < 0){
-		fprint(2, "chunkfile: %r\n");
+		fprint(2, "loadfile: %r\n");
 		freechunk(c);
 		return nil;
-	}else if(c->len == 0){
-		fprint(2, "chunkfile: nothing read\n");
+	}
+	c->len += n;
+	if(c->len == 0){
+		fprint(2, "loadfile: nothing read\n");
 		freechunk(c);
 		return nil;
 	}else if(c->len < b->bufsz){
 		b->buf = erealloc(b->buf, c->len, b->bufsz);
 		b->bufsz = c->len;
 	}
+	d->norris = c;
+	*d = newdot(d);
 	return c;
-}
-
-void
-initbuf(Chunk *c)
-{
-	norris = c;
-	totalsz = chainlen(c);
-	dot.pos = dot.from = 0;
-	dot.to = totalsz;
 }

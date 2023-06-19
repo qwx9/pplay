@@ -7,7 +7,6 @@
 
 QLock lsync;
 int debugdraw;
-vlong latchedpos;
 
 enum{
 	Cbg,
@@ -62,7 +61,7 @@ int
 	usize p;
 
 	p = va_arg(fmt->args, usize);
-	if(p > totalsz)
+	if(p > current->totalsz)
 		return fmtstrcpy(fmt, "-∞");
 	b2t(p, &th, &tm, &ts, &tμ);
 	return fmtprint(fmt, "%02d:%02d:%02d.%03d (%zd)",
@@ -89,7 +88,7 @@ drawchunks(void)
 	usize p, off;
 	Chunk *c;
 
-	c = p2c(views, &off);
+	c = p2c(views, &off, current);
 	for(p=views-off; p<viewe; p+=c->len, c=c->right){
 		if(p == 0)
 			continue;
@@ -114,9 +113,10 @@ again:
 		lockdisplay(display);
 		draw(viewbg, viewbg->r, col[Cbg], nil, ZP);
 		unlockdisplay(display);
+		d = *current;
 		d.from = 0;
-		d.pos = views;
-		d.to = totalsz;
+		d.cur = views;
+		d.to = d.totalsz;
 		m = viewe - views;
 		x = 0;
 		qlock(&lsync);
@@ -134,7 +134,7 @@ again:
 						fprint(2, "getslice: %r\n");
 					goto end;
 				}
-				d.pos += k;
+				d.cur += k;
 				e = p + k;
 				while(p < e){
 					s = (s16int)(p[1] << 8 | p[0]);
@@ -163,7 +163,7 @@ again:
 			if(stereo)
 				draw(viewbg, r, col[Csamp], nil, ZP);
 			unlockdisplay(display);
-			x = (d.pos - views) / T;
+			x = (d.cur - views) / T;
 			if(x % 320 == 0)
 				update();
 		}
@@ -178,14 +178,14 @@ drawstat(void)
 	char s[256];
 	Point p;
 
-	seprint(s, s+sizeof s, "T %zd @ %τ", T / Sampsz, dot.pos);
+	seprint(s, s+sizeof s, "T %zd @ %τ", T / Sampsz, current->cur);
 	p = string(screen, statp, col[Ctext], ZP, font, s);
-	if(dot.from > 0 || dot.to < totalsz){
-		seprint(s, s+sizeof s, " ↺ %τ - %τ (%τ)", dot.from, dot.to, dot.to - dot.from);
+	if(current->from > 0 || current->to < current->totalsz){
+		seprint(s, s+sizeof s, " ↺ %τ - %τ", current->from, current->to);
 		p = string(screen, p, col[Cloop], ZP, font, s);
 	}
-	if(latchedpos >= 0){
-		seprint(s, s+sizeof s, " ‡ %τ", (usize)latchedpos);
+	if(current->off != current->from){
+		seprint(s, s+sizeof s, " ‡ %τ", current->off);
 		p = string(screen, p, col[Cins], ZP, font, s);
 	}
 }
@@ -196,10 +196,10 @@ drawview(void)
 	draw(view, view->r, viewbg, nil, ZP);
 	if(debugdraw)
 		drawchunks();
-	drawpos(dot.from, col[Cloop]);
-	drawpos(dot.to, col[Cloop]);
-	if(latchedpos >= 0)
-		drawpos(latchedpos, col[Cins]);
+	drawpos(current->from, col[Cloop]);
+	drawpos(current->to, col[Cloop]);
+	if(current->off != current->from)
+		drawpos(current->from, col[Cins]);
 }
 
 void
@@ -208,7 +208,7 @@ update(void)
 	int x;
 	usize p;
 
-	p = dot.pos;
+	p = current->cur;
 	lockdisplay(display);
 	drawview();
 	draw(screen, screen->r, view, nil, ZP);
@@ -233,7 +233,7 @@ setzoom(int Δz, int mul)
 		z = zoom / pow(2, -Δz);
 	else
 		z = zoom * pow(2, Δz);
-	if(z < 1.0 || z > (totalsz / Sampsz) / Dx(screen->r))
+	if(z < 1.0 || z > (current->totalsz / Sampsz) / Dx(screen->r))
 		return;
 	zoom = z;
 	redraw(0);
@@ -245,8 +245,8 @@ zoominto(vlong from, vlong to)
 	if(from < 0)
 		from = 0;
 	from &= ~3;
-	if(to >= totalsz)
-		to = totalsz;
+	if(to >= current->totalsz)
+		to = current->totalsz;
 	to &= ~3;
 	if((to - from) / Sampsz < Dx(screen->r)){
 		werrstr("range too small");
@@ -254,7 +254,7 @@ zoominto(vlong from, vlong to)
 	}
 	views = from;
 	viewe = to;
-	zoom = (double)totalsz / (to - from);
+	zoom = (double)current->totalsz / (to - from);
 	redraw(0);
 	return 0;
 }
@@ -290,22 +290,21 @@ setrange(usize from, usize to)
 {
 	assert((from & 3) == 0);
 	assert((to & 3) == 0);
-	dot.from = from;
-	dot.to = to;
-	if(dot.pos < from || dot.pos >= to)
-		dot.pos = from;
-	latchedpos = -1;
+	current->from = from;
+	current->to = to;
+	if(current->cur < from || current->cur >= to)
+		current->cur = from;
+	current->off = -1ULL;
 }
 
 static int
 setcur(usize off)
 {
-	if(off < dot.from || off > dot.to - Outsz){
+	if(off < current->from || off > current->to - Outsz){
 		werrstr("cannot jump outside of loop bounds\n");
 		return -1;
 	}
-	dot.pos = off;
-	latchedpos = off;
+	current->off = current->cur = off;
 	update();
 	return 0;
 }
@@ -315,12 +314,12 @@ setloop(vlong off)
 {
 	off *= T;
 	off += views;
-	if(off < 0 || off > totalsz)
+	if(off < 0 || off > current->totalsz)
 		return;
-	if(off < dot.pos)
-		setrange(off, dot.to);
+	if(off < current->cur)
+		setrange(off, current->to);
 	else
-		setrange(dot.from, off);
+		setrange(current->from, off);
 	update();
 }
 
@@ -342,7 +341,7 @@ resetdraw(void)
 	int x;
 	Rectangle viewr;
 
-	x = screen->r.min.x + (dot.pos - views) / T;
+	x = screen->r.min.x + (current->cur - views) / T;
 	viewr = rectsubpt(screen->r, screen->r.min);
 	statp = screen->r.min;
 	if(stereo)
@@ -367,11 +366,11 @@ redraw(int all)
 	usize span;
 
 	lockdisplay(display);
-	T = (vlong)(totalsz / zoom / Dx(screen->r)) & ~3;
+	T = (vlong)(current->totalsz / zoom / Dx(screen->r)) & ~3;
 	if(T == 0)
 		T = 4;
 	span = Dx(screen->r) * T;
-	viewmax = totalsz - span;
+	viewmax = current->totalsz - span;
 	if(views > viewmax)
 		views = viewmax;
 	viewe = views + span;

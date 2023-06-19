@@ -4,49 +4,42 @@
 #include "dat.h"
 #include "fns.h"
 
-Dot dot;
-usize totalsz;
 int treadsoftly;
+usize ndots;
+Dot *current, *dots;
 
 static int epfd[2];
 
 static int
 paste(char *)
 {
-	usize from, to;
-
-	from = dot.from;
-	to = dot.to;
-	if(latchedpos >= 0 && dot.from == 0 && dot.to == totalsz)
-		to = from = latchedpos;
-	latchedpos = -1;
-	return cpaste(from, to) == 0 ? 1 : -1;
+	return cpaste(current) == 0 ? 1 : -1;
 }
 
 static int
 copy(char *)
 {
-	ccopy(dot.from, dot.to);
+	ccopy(current);
 	return 0;
 }
 
 static vlong
 cut(char *)
 {
-	dprint(nil, "cmd/cut %Δ\n", &dot);
-	if(dot.from == 0 && dot.to == totalsz){
+	dprint(nil, "cmd/cut %Δ\n", current);
+	if(current->from == 0 && current->to == current->totalsz){
 		werrstr("cut: can't cut entire buffer");
 		return -1;
 	}
-	ccut(dot.from, dot.to);
+	ccut(current);
 	return 1;
 }
 
 static int
 crop(char *)
 {
-	dprint(nil, "cmd/crop %Δ\n", &dot);
-	ccrop(dot.from, dot.to);
+	dprint(nil, "cmd/crop %Δ\n", current);
+	ccrop(current);
 	return 1;
 }
 
@@ -58,11 +51,11 @@ writebuf(int fd)
 	usize n, m, k;
 	Dot d;
 
-	d = dot;
-	d.pos = d.from;
+	d = *current;
+	d.cur = d.from;
 	if((nio = iounit(fd)) == 0)
 		nio = 8192;
-	for(m=d.to-d.from, b=(uchar*)&d; m>0; m-=n, d.pos+=n){
+	for(m=d.to-d.from, b=(uchar*)&d; m>0; m-=n, d.cur+=n){
 		k = nio < m ? nio : m;
 		if((b = getslice(&d, k, &k)) == nil || k <= 0){
 			fprint(2, "writebuf: couldn\'t snarf: %r\n");
@@ -103,22 +96,23 @@ static void
 rproc(void *efd)
 {
 	int fd;
-	Dot d;
+	Dot d, cd;
 	Chunk *c;
 
-	d = dot;
+	d = *current;
 	treadsoftly++;
 	fd = (intptr)efd;
-	if((c = chunkfile(fd)) == nil){
+	if((c = loadfile(fd, &cd)) == nil){
 		treadsoftly = 0;
-		threadexits("failed reading from pipe: %r");
+		fprint(2, "failed reading from pipe: %r");
+		threadexits("read error");
 	}
 	close(fd);
 	qlock(&lsync);
-	dot.from = d.from;
-	dot.to = d.to;
-	chold(c);
-	paste(nil);
+	chold(c, &d);
+	*current = d;
+	if(paste(nil) < 0)
+		fprint(2, "paste: %r\n");
 	qunlock(&lsync);
 	treadsoftly--;
 	redraw(0);
@@ -225,6 +219,7 @@ cmd(char *s)
 			break;
 		s += n;
 	}
+	dprint(current->norris, "current dot=%Δ\n", current);
 	switch(r){
 	case '<': x = pipefrom(s); break;
 	case '^': x = pipethrough(s); break;
@@ -241,8 +236,7 @@ cmd(char *s)
 	case 'x': x = crop(s); break;
 	default: werrstr("unknown command %C", r); x = -1; break;
 	}
-	if(debug)
-		checksz();
+	dprint(current->norris, "final dot=%Δ\n", current);
 	return x;
 }
 
@@ -251,25 +245,14 @@ advance(Dot *d, usize n)
 {
 	usize m;
 
-	assert(d->pos >= d->from && d->pos <= d->to);
+	assert(d->cur >= d->from && d->cur <= d->to);
 	while(n > 0){
-		m = d->to - d->pos > n ? n : d->to - d->pos;
+		m = d->to - d->cur > n ? n : d->to - d->cur;
 		n -= m;
-		d->pos += m;
-		if(d->pos == d->to)
-			d->pos = d->from;
+		d->cur += m;
+		if(d->cur == d->to)
+			d->cur = d->from;
 	}
-	return 0;
-}
-
-int
-loadin(int fd)
-{
-	Chunk *c;
-
-	if((c = chunkfile(fd)) == nil)
-		sysfatal("loadin: %r");
-	initbuf(c);
 	return 0;
 }
 
@@ -281,8 +264,15 @@ catch(void *, char *msg)
 	noted(NDFLT);
 }
 
-void
-initcmd(void)
+int
+initcmd(int fd)
 {
-	notify(catch);
+	Dot d;
+
+	if(loadfile(fd, &d) == nil)
+		sysfatal("initcmd: %r");
+	dots = emalloc(++ndots * sizeof *dots);
+	dots[0] = d;
+	current = dots;
+	return 0;
 }
