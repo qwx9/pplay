@@ -388,12 +388,12 @@ initdrw(int fuckit)
 	display->locking = 1;
 	unlockdisplay(display);
 	if(!fuckit){
-		col[Cbg] = eallocimage(Rect(0,0,1,1), 1, 0xFFFFEAFF);
-		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, DBlack);
+		col[Cbg] = eallocimage(Rect(0,0,1,1), 1, 0xFFFFC0FF);
+		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x3F3F20FF);
 		col[Ctext] = display->black;
 		col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0xFF2222FF);
-		col[Cins] = eallocimage(Rect(0,0,1,1), 1, DDarkgreen);
-		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x4444FFFF);
+		col[Cins] = eallocimage(Rect(0,0,1,1), 1, DBlue);
+		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0xDD00DDFF);
 		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, DPaleyellow);
 	}else{
 		col[Cbg] = display->black;
