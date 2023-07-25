@@ -223,6 +223,7 @@ newdot(Dot *dp)
 		d.totalsz += c->len;
 	d.cur = d.from = dp->from < d.totalsz ? dp->from : 0;
 	d.to = d.totalsz;
+	d.off = -1;
 	return d;
 }
 
