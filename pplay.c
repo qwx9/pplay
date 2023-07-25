@@ -10,7 +10,7 @@
 extern QLock lsync;
 
 int stereo;
-int debug;
+int debug, paused = 1;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
@@ -42,7 +42,7 @@ athread(void *)
 			threadexits("write");
 		}
 		nerr = 0;
-		update();
+		update(0, 0);
 skip:
 		yield();
 	}
@@ -51,20 +51,18 @@ skip:
 static void
 toggleplay(void)
 {
-	static int play;
-
-	if(play ^= 1){
+	if(paused ^= 1){
+		if(!cat)
+			close(afd);
+		afd = -1;
+	}else{
 		if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0){
 			fprint(2, "toggleplay: %r\n");
-			play = 0;
+			paused ^= 1;
 			return;
 		}
 		if(threadcreate(athread, nil, 2*mainstacksize) < 0)
 			sysfatal("threadcreate: %r");
-	}else{
-		if(!cat)
-			close(afd);
-		afd = -1;
 	}
 }
 
@@ -155,7 +153,7 @@ threadmain(int argc, char **argv)
 			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
 			case 'b': setjump(current->from); break;
-			case Kesc: setrange(0, current->totalsz); update(); break;
+			case Kesc: setrange(0, current->totalsz); update(0, 0); break;
 			case '\n': zoominto(current->from, current->to); break;
 			case 'z': zoominto(0, current->totalsz); break;
 			case '-': setzoom(-1, 0); break;
@@ -173,8 +171,8 @@ threadmain(int argc, char **argv)
 				}
 				qlock(&lsync);
 				switch(cmd(p)){
-				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); update(); break;
-				case 0: update(); break;
+				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); update(0, 0); break;
+				case 0: update(0, 0); break;
 				case 1: redraw(0); break;
 				case 2: redraw(1); break;
 				}

@@ -10,7 +10,7 @@ void	ccrop(Dot*);
 Chunk*	loadfile(int, Dot*);
 int	cmd(char*);
 int	initcmd(int);
-void	update(void);
+void	update(int, int);
 void	setzoom(int, int);
 int	zoominto(vlong, vlong);
 void	setrange(usize, usize);

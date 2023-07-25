@@ -34,7 +34,7 @@ extern int treadsoftly;
 extern QLock lsync;
 
 extern int stereo;
-extern int debug;
+extern int debug, paused;
 extern int debugdraw;
 
 #define MIN(x,y)	((x) < (y) ? (x) : (y))
