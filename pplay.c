@@ -137,8 +137,8 @@ threadmain(int argc, char **argv)
 			if(eqpt(mo.xy, ZP))
 				mo = mc->Mouse;
 			switch(mc->buttons){
-			case 1: setofs(mc->xy.x - screen->r.min.x); break;
-			case 2: setloop(mc->xy.x - screen->r.min.x); break;
+			case 1: setjump(p2off(mc->xy.x - screen->r.min.x)); if(paused) update(0, 0); break;
+			case 2: setloop(p2off(mc->xy.x - screen->r.min.x)); if(paused) update(0, 0); break;
 			case 4: setpan(mo.xy.x - mc->xy.x); break;
 			case 8: setzoom(1, 1); break;
 			case 16: setzoom(-1, 1); break;

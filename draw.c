@@ -302,8 +302,8 @@ setpage(int d)
 void
 setrange(usize from, usize to)
 {
-	assert((from & 3) == 0);
-	assert((to & 3) == 0);
+	from &= ~3;
+	to &= ~3;
 	if(current->from > views)
 		drawpos(current->from, view);
 	if(current->to < viewe)
@@ -318,41 +318,40 @@ setrange(usize from, usize to)
 static int
 setcur(usize off)
 {
+	off &= ~3;
 	if(off < current->from || off > current->to - Outsz){
-		werrstr("cannot jump outside of loop bounds\n");
+		werrstr("cannot jump outside of loop bounds");
 		return -1;
 	}
 	current->off = current->cur = off;
-	if(paused)
-		update(0, 0);
 	return 0;
 }
 
-void
+int
 setloop(vlong off)
 {
-	off *= T;
-	off += views;
-	if(off < 0 || off > current->totalsz)
-		return;
+	off &= ~3;
+	if(off < 0 || off > current->totalsz){
+		werrstr("invalid range");
+		return -1;
+	}
 	if(off < current->cur)
 		setrange(off, current->to);
 	else
 		setrange(current->from, off);
-	if(paused)
-		update(0, 0);
+	return 0;
 }
 
-void
-setjump(usize off)
+int
+setjump(vlong off)
 {
-	setcur(off);
+	return setcur(off) & ~3;
 }
 
-void
-setofs(usize ofs)
+vlong
+p2off(int x)
 {
-	setcur(views + ofs * T);
+	return views + x * T & ~3;
 }
 
 static void

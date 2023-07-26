@@ -10,6 +10,37 @@ Dot *current, *dots;
 
 static int epfd[2];
 
+// FIXME: cursor moves too fast
+static int
+setright(char *s)
+{
+	vlong off, m;
+
+	off = atoll(s) * Sampsz;
+	if(current->cur > off){
+		m = Rate * Sampsz;
+		setjump(off - m >= 0 ? off - m : 0);
+	}
+	return setloop(off);
+}
+
+static int
+setleft(char *s)
+{
+	vlong off;
+
+	off = atoll(s) * Sampsz;
+	if(current->cur < off)
+		setjump(off + Sampsz);
+	return setloop(off);
+}
+
+static int
+jumpto(char *s)
+{
+	return setjump(atoll(s) * Sampsz);
+}
+
 static int
 paste(char *)
 {
@@ -224,8 +255,12 @@ cmd(char *s)
 	case '<': x = pipefrom(s); break;
 	case '^': x = pipethrough(s); break;
 	case '|': x = pipeto(s); break;
+	case 'L': x = setleft(s); break;
+	case 'R': x = setright(s); break;
 	case 'c': x = copy(s); break;
 	case 'd': x = cut(s); break;
+	case 'j': x = jumpto(s); break;
+	//case 'm': x = mark(s); break;
 	case 'p': x = paste(s); break;
 	case 'q': threadexitsall(nil);
 	case 'r': x = readfrom(s); break;
