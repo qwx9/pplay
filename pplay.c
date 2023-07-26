@@ -75,7 +75,7 @@ prompt(Rune r)
 	chartorune(&q, buf);
 	if(q != r)
           snprint(buf, sizeof buf, "%C", r);
-	if(enter(nil, buf, sizeof(buf)-UTFmax, mc, kc, _screen) < 0)
+	if(enter(nil, buf, sizeof(buf)-UTFmax, mc, kc, nil) < 0)
 		return nil;
 	return buf;
 }
