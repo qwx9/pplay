@@ -76,14 +76,13 @@ main(int argc, char **argv)
 			fp->n = read(fp->fd, fp->buf+fp->Δ, m);
 			if(n == 0 || notrunc && n < fp->n || !notrunc && n > fp->n)
 				n = fp->n;
-			fprint(2, "%zd n %d fp->n %d Δ %d\n", fp-ftab, n, fp->n, fp->Δ);
 			if(fp->n > 0)
 				continue;
 			fp->fd = -1;
 			if(!notrunc)
 				exits(nil);
 			if(fp->n < 0)
-				fprint(2, "file %s: read: %r\n", fp->path);
+				fprint(2, "read %s: %r\n", fp->path);
 		}
 		if(n <= 0)
 			break;
