@@ -10,7 +10,6 @@ struct File{
 	int fd;
 	char *path;
 	int n;
-	int Δ;
 	uchar buf[Bufsz];
 };
 void
@@ -23,7 +22,7 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-	int n, m, notrunc, gotem;
+	int m, max, notrunc;
 	double f;
 	File *ftab, *fp;
 	uchar u[Bufsz], *p, *q;
@@ -42,55 +41,39 @@ main(int argc, char **argv)
 	if((ftab = mallocz(nf * sizeof *ftab, 1)) == nil)
 		sysfatal("mallocz: %r");
 	fp = ftab;
-	(fp++)->path = "stdin";
-	while(*argv != nil){
+	fp->path = "/fd/0";
+	if((d = dirfstat(0)) == nil)
+		sysfatal("dirfstat: %r");
+	m = d->length;
+	free(d);
+	fp->fd = m > 0 ? 0 : -1;
+	for(fp++; *argv!=nil; fp++){
 		if((fp->fd = open(*argv, OREAD)) < 0)
 			sysfatal("open: %r");
-		(fp++)->path = *argv++;
+		fp->path = *argv++;
 	}
-	gotem = 0;
 	for(;;){
-		n = 0;
+		max = sizeof ftab[0].buf;
 		for(fp=ftab; fp<ftab+nf; fp++){
 			if(fp->fd < 0)
 				continue;
-			if(fp == ftab){
-				if((d = dirfstat(0)) == nil)
-					sysfatal("dirfstat: %r");
-				m = d->length;
-				free(d);
-				if(m > 0)
-					gotem = 1;
-				else if(gotem){
-					if(!notrunc)
-						exits(nil);
-					fp->fd = -1;
-					continue;
-				}
-			}
-			m = sizeof fp->buf - fp->Δ;
-			if(m < 0)
-				m = sizeof fp->buf;
-			if(n > 0 && n < m)
-				m = n;
-			fp->n = read(fp->fd, fp->buf+fp->Δ, m);
-			if(n == 0 || notrunc && n < fp->n || !notrunc && n > fp->n)
-				n = fp->n;
-			if(fp->n > 0)
+			fp->n = read(fp->fd, fp->buf, max);
+			if(fp->n > 0){
+				if(fp == ftab)
+					max = fp->n;
 				continue;
+			}
 			fp->fd = -1;
-			if(!notrunc)
-				exits(nil);
 			if(fp->n < 0)
 				fprint(2, "read %s: %r\n", fp->path);
+			if(fp == ftab && !notrunc)
+				goto end;
 		}
-		if(n <= 0)
-			break;
-		memset(u, 0, n);
+		memset(u, 0, max);
 		for(fp=ftab; fp<ftab+nf; fp++){
 			if(fp->fd < 0)
 				continue;
-			for(p=u, q=fp->buf; q<fp->buf+n; p+=2, q+=2){
+			for(p=u, q=fp->buf; q<fp->buf+fp->n; p+=2, q+=2){
 				v = (s16int)(q[1] << 8 | q[0]);
 				v *= f;
 				v += (s16int)(p[1] << 8 | p[0]);
@@ -101,9 +84,9 @@ main(int argc, char **argv)
 				p[0] = v;
 				p[1] = v >> 8;
 			}
-			fp->Δ = n < fp->n ? fp->n - n : 0;
 		}
-		write(1, u, n);
+		write(1, u, max);
 	}
+end:
 	exits(nil);
 }
