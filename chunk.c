@@ -526,6 +526,7 @@ loadfile(int fd, Dot *d)
 		b->buf = erealloc(b->buf, c->len, b->bufsz);
 		b->bufsz = c->len;
 	}
+	memset(d, 0, sizeof *d);
 	d->norris = c;
 	*d = newdot(d);
 	return c;
