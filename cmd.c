@@ -4,7 +4,6 @@
 #include "dat.h"
 #include "fns.h"
 
-int treadsoftly;
 usize ndots;
 Dot *current, *dots;
 
@@ -44,7 +43,12 @@ jumpto(char *s)
 static int
 paste(char *)
 {
-	return cpaste(current) == 0 ? 1 : -1;
+	int r;
+
+	qlock(&lsync);
+	r = cpaste(current) == 0 ? 1 : -1;
+	qunlock(&lsync);
+	return r;
 }
 
 static int
@@ -62,7 +66,9 @@ cut(char *)
 		werrstr("cut: can't cut entire buffer");
 		return -1;
 	}
+	qlock(&lsync);
 	ccut(current);
+	qunlock(&lsync);
 	return 1;
 }
 
@@ -70,7 +76,9 @@ static int
 crop(char *)
 {
 	dprint(nil, "cmd/crop %Δ\n", current);
+	qlock(&lsync);
 	ccrop(current);
+	qunlock(&lsync);
 	return 1;
 }
 
@@ -131,10 +139,8 @@ rproc(void *efd)
 	Chunk *c;
 
 	d = *current;
-	treadsoftly++;
 	fd = (intptr)efd;
 	if((c = loadfile(fd, &cd)) == nil){
-		treadsoftly = 0;
 		fprint(2, "failed reading from pipe: %r");
 		threadexits("read error");
 	}
@@ -145,7 +151,6 @@ rproc(void *efd)
 	if(paste(nil) < 0)
 		fprint(2, "paste: %r\n");
 	qunlock(&lsync);
-	treadsoftly--;
 	redraw(0);
 	threadexits(nil);
 }

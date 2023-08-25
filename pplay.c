@@ -128,10 +128,12 @@ threadmain(int argc, char **argv)
 	for(;;){
 		switch(alt(a)){
 		case 0:
+			qlock(&lsync);
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
 			mo = mc->Mouse;
 			redraw(1);
+			qunlock(&lsync);
 			break;
 		case 1:
 			if(eqpt(mo.xy, ZP))
@@ -165,18 +167,12 @@ threadmain(int argc, char **argv)
 			default:
 				if((p = prompt(r)) == nil || strlen(p) == 0)
 					break;
-				if(treadsoftly){
-					fprint(2, "dropping edit command during ongoing read\n");
-					break;
-				}
-				qlock(&lsync);
 				switch(cmd(p)){
 				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); update(0, 0); break;
 				case 0: update(0, 0); break;
 				case 1: redraw(0); break;
 				case 2: redraw(1); break;
 				}
-				qunlock(&lsync);
 			}
 		}
 	}
