@@ -20,14 +20,15 @@ enum{
 };
 static Image *col[Ncol];
 static Image *view;
-static Rectangle liner, statr;
-static usize views, viewe, viewmax;
+static Rectangle statr;
+static usize views, viewe, viewmax, linepos;
 static int bgscalyl, bgscalyr;
 static double bgscalf;
-static Channel *drawc;
+static Channel *upyours, *drawc;
 static usize T;
-static int sampwidth = 1;
+static int sampwidth = 1;	/* pixels per sample */
 static double zoom = 1.0;
+static int stalerender, working;
 
 static Image *
 eallocimage(Rectangle r, int repl, ulong col)
@@ -37,6 +38,18 @@ eallocimage(Rectangle r, int repl, ulong col)
 	if((i = allocimage(display, r, screen->chan, repl, col)) == nil)
 		sysfatal("allocimage: %r");
 	return i;
+}
+
+vlong
+ss2view(int x)
+{
+	return (x - views) / (T * sampwidth);
+}
+
+vlong
+view2ss(int x)
+{
+	return views + x * T * sampwidth & ~3;
 }
 
 static void
@@ -68,21 +81,25 @@ int
 }
 
 static int
-drawpos(usize pos, Image *c)
+renderpos(usize ss, Image *c, int justdraw)
 {
 	Rectangle r;
 
-	if(pos <= views || pos >= viewe)
+	if(ss <= views || ss >= viewe)
 		return 0;
-	r = screen->r;
-	r.min.x += (pos - views) / T;
+	r = view->r;
+	r.min.x = ss2view(ss);
 	r.max.x = r.min.x + 1;
-	draw(screen, r, c, nil, subpt(r.min, screen->r.min));
+	if(justdraw){
+		r = rectaddpt(r, screen->r.min);
+		draw(screen, r, c, nil, ZP);
+	}else
+		draw(view, r, c, nil, ZP);
 	return 1;
 }
 
 static void
-drawchunks(void)
+renderchunks(void)
 {
 	usize p, off;
 	Chunk *c;
@@ -91,96 +108,69 @@ drawchunks(void)
 	for(p=views-off; p<viewe; p+=c->len, c=c->right){
 		if(p == 0)
 			continue;
-		drawpos(p, col[Cchunk]);
+		renderpos(p, col[Cchunk], 0);
 	}
 }
 
 static void
-drawsamps(void*)
+rendermarks(void)
 {
-	int ox, n, lmin, lmax, rmin, rmax;
-	usize m, k;
-	s16int s;
-	double x;
-	uchar *p, *e;
-	Rectangle l, r;
-	Point range;
-	Dot d;
+	if(debugdraw)
+		renderchunks();
+	renderpos(current->from, col[Cloop], 0);
+	renderpos(current->to, col[Cloop], 0);
+	if(current->off != current->from)
+		renderpos(current->off, col[Cins], 0);
+}
 
-	for(;;){
-end:
-		if(recv(drawc, &range) < 0)
-			break;
-again:
-		r = view->r;
-		r.min.x = (range.x - views) / T;
-		r.max.x = (range.y - views) / T;
-		lockdisplay(display);
-		draw(view, r, col[Cbg], nil, ZP);
-		unlockdisplay(display);
-		d = *current;
-		d.from = range.x;
-		d.cur = d.from;
-		d.to = range.y;
-		m = d.to - d.from;
-		ox = 0;
-		x = 0.0;
-		qlock(&lsync);
-		while(m > 0){
-			if((n = nbrecv(drawc, &range)) < 0)
-				return;
-			else if(n == 1){
-				qunlock(&lsync);
-				goto again;
-			}
-			n = m < T * sampwidth ? m : T * sampwidth;
-			lmin = lmax = 0;
-			rmin = rmax = 0;
-			while(n > 0){
-				if((p = getslice(&d, n, &k)) == nil){
-					if(k > 0)
-						fprint(2, "getslice: %r\n");
-					goto end;
-				}
-				d.cur += k;
-				e = p + k;
-				while(p < e){
-					s = (s16int)(p[1] << 8 | p[0]);
-					if(s < lmin)
-						lmin = s;
-					else if(s > lmax)
-						lmax = s;
-					if(stereo){
-						s = (s16int)(p[3] << 8 | p[2]);
-						if(s < rmin)
-							rmin = s;
-						else if(s > rmax)
-							rmax = s;
-					}
-					p += 4 * sampwidth;
-				}
-				n -= k;
-				m -= k;
-			}
-			l = Rect(x, bgscalyl - lmax / bgscalf,
-				x+sampwidth, bgscalyl - lmin / bgscalf);
-			lockdisplay(display);
-			draw(view, l, col[Csamp], nil, ZP);
-			if(stereo){
-				r = Rect(x, bgscalyr - rmax / bgscalf,
-					x+sampwidth, bgscalyr - rmin / bgscalf);
-				draw(view, r, col[Csamp], nil, ZP);
-			}
-			unlockdisplay(display);
-			if(x - ox >= 1600){
-				update(ox, x);
-				ox = x;
-			}
-			x += k / T;
-		}
-		update(ox, Dx(screen->r));
-		qunlock(&lsync);
+static void
+rendersamples(Track *t, Rectangle rr)
+{
+	s16int *l, *e, *r;
+	Rectangle rx;
+
+	draw(view, rr, col[Cbg], nil, ZP);
+	if(Dx(rr) > t->len / 2)
+		rr.max.x = rr.min.x + t->len / 2;
+	rx = rr;
+	for(l=t->graph[0]+2*rx.min.x, e=l+2*Dx(rr); l<e; l+=2, rx.min.x++){
+		rx.min.y = bgscalyl - l[1] / bgscalf;
+		rx.max.x = rx.min.x + sampwidth;
+		rx.max.y = bgscalyl - l[0] / bgscalf;
+		draw(view, rx, col[Csamp], nil, ZP);
 	}
+	if(!stereo)
+		return;
+	rx = rr;
+	for(r=t->graph[1]+2*rx.min.x, e=r+2*Dx(rr); r<e; r+=2, rx.min.x++){
+		rx.min.y = bgscalyr - r[1] / bgscalf;
+		rx.max.x = rx.min.x + sampwidth;
+		rx.max.y = bgscalyr - r[0] / bgscalf;
+		draw(view, rx, col[Csamp], nil, ZP);
+	}
+}
+
+static void
+render(void)
+{
+	Track *t;
+
+	for(t=tracks; t<tracks+ntracks; t++)
+		rendersamples(t, view->r);
+	rendermarks();
+}
+
+static void
+erasemark(usize ss)
+{
+	Rectangle r;
+
+	ss = ss2view(ss);
+	r = view->r;
+	r.min.x = ss;
+	r.max.x = r.min.x + 1;
+	r = rectaddpt(r, screen->r.min);
+	draw(screen, r, view, nil, subpt(r.min, screen->r.min));
 }
 
 static void
@@ -204,36 +194,163 @@ drawstat(void)
 }
 
 static void
-drawmarks(void)
+update(void)
 {
-	if(debugdraw)
-		drawchunks();
-	drawpos(current->from, col[Cloop]);
-	drawpos(current->to, col[Cloop]);
-	if(current->off != current->from)
-		drawpos(current->from, col[Cins]);
-}
-
-void
-update(int x, int x´)
-{
-	Rectangle r;
-
-	r = liner;
 	lockdisplay(display);
-	draw(screen, liner, view, nil, subpt(r.min, screen->r.min));
-	if(x < x´){
-		r.min.x = screen->r.min.x + x;
-		r.max.x = screen->r.min.x + x´;
-		draw(screen, r, view, nil, subpt(r.min, screen->r.min));
-	}
-	liner.min.x = screen->r.min.x + (current->cur - views) / T;
-	liner.max.x = liner.min.x + 1;
-	drawpos(current->cur, col[Cline]);
-	drawmarks();
+	if(stalerender || working){
+		if(!working)
+			stalerender = 0;
+		render();
+		draw(screen, rectaddpt(view->r, screen->r.min), view, nil, ZP);
+	}else
+		erasemark(linepos);
+	renderpos(current->cur, col[Cline], 1);
+	linepos = current->cur;
 	drawstat();
 	flushimage(display, 1);
 	unlockdisplay(display);
+}
+
+static void
+drawproc(void*)
+{
+	threadsetname("drawer");
+	for(;;){
+		if(recv(drawc, nil) < 0){
+			fprint(2, "drawproc: %r\n");
+			break;
+		}
+		update();
+	}
+}
+
+void
+refresh(void)
+{
+	nbsend(drawc, nil);
+}
+
+static void
+sample(Dot d)
+{
+	int n, lmin, lmax, rmin, rmax;
+	usize k;
+	uchar *p, *e;
+	s16int s, *l, *r, *le;
+	vlong N;
+
+	N = (d.to - d.from) / (T * sampwidth);
+	if(d.t->len < 2*N){	/* min, max */
+		d.t->graph[0] = erealloc(d.t->graph[0],
+			2*N * sizeof *d.t->graph[0],
+			d.t->len * sizeof *d.t->graph[0]);
+		d.t->graph[1] = erealloc(d.t->graph[1],
+			2*N * sizeof *d.t->graph[1],
+			d.t->len * sizeof *d.t->graph[1]);
+	}
+	d.t->len = 2*N;
+	l = d.t->graph[0];
+	r = d.t->graph[1];
+	le = l + d.t->len;
+	while(l < le){
+		n = T * sampwidth;
+		lmin = lmax = rmin = rmax = 0;
+		while(n > 0){
+			if((p = getslice(&d, n, &k)) == nil){
+				if(k > 0)
+					fprint(2, "getslice: %r\n");
+				l = le;
+				break;
+			}
+			d.cur += k;
+			for(e=p+k; p<e; p+=Sampsz*sampwidth){
+				s = (s16int)(p[1] << 8 | p[0]);
+				if(s < lmin)
+					lmin = s;
+				else if(s > lmax)
+					lmax = s;
+				if(stereo){
+					s = (s16int)(p[3] << 8 | p[2]);
+					if(s < rmin)
+						rmin = s;
+					else if(s > rmax)
+						rmax = s;
+				}
+			}
+			n -= k;
+		}
+		*l++ = lmin;
+		*l++ = lmax;
+		if(stereo){
+			*r++ = rmin;
+			*r++ = rmax;
+		}
+		if(upyours->n > 0)
+			return;
+	}
+}
+
+static void
+sampleproc(void*)
+{
+	Dot d;
+
+	threadsetname("sampler");
+	for(;;){
+		if(recv(upyours, &d) < 0){
+			fprint(2, "sampproc: %r\n");
+			break;
+		}
+		working = 1;
+		stalerender = 1;
+		sample(d);
+		working = 0;
+	}
+}
+
+static void
+resetdraw(void)
+{
+	Rectangle viewr;
+
+	viewr = rectsubpt(screen->r, screen->r.min);
+	statr = screen->r;
+	if(stereo){
+		statr.min.y += (Dy(screen->r) - font->height) / 2 + 1;
+		statr.max.y = statr.min.y + font->height;
+	}else
+		statr.min.y = screen->r.max.y - font->height;
+	freeimage(view);
+	view = eallocimage(viewr, 0, DNofill);
+	bgscalyl = (viewr.max.y - font->height) / (stereo ? 4 : 2);
+	bgscalyr = viewr.max.y - bgscalyl;
+	bgscalf = 32767. / bgscalyl;
+}
+
+void
+redraw(int all)
+{
+	usize span;
+	Dot d;
+
+	lockdisplay(display);
+	T = (vlong)(current->totalsz / zoom / Dx(screen->r)) & ~3;
+	if(T < Sampsz)
+		T = Sampsz;
+	span = Dx(screen->r) * T;
+	viewmax = current->totalsz - span;
+	if(views > viewmax)
+		views = viewmax;
+	viewe = views + span;
+	if(all)
+		resetdraw();
+	unlockdisplay(display);
+	/* FIXME: this overloading is stupid; just fork for each? have multiple
+	 * workers to begin with à la page? */
+	d = *current;
+	d.from = d.cur = views;
+	d.to = viewe;
+	nbsend(upyours, &d);
 }
 
 void
@@ -304,19 +421,18 @@ setrange(usize from, usize to)
 {
 	from &= ~3;
 	to &= ~3;
-	if(current->from > views)
-		drawpos(current->from, view);
-	if(current->to < viewe)
-		drawpos(current->to, view);
 	current->from = from;
 	current->to = to;
 	if(current->cur < from || current->cur >= to)
 		current->cur = from;
 	current->off = -1ULL;
+	stalerender = 1;
+	if(paused)
+		refresh();
 }
 
-static int
-setcur(usize off)
+int
+setjump(vlong off)
 {
 	off &= ~3;
 	if(off < current->from || off > current->to - Outsz){
@@ -324,6 +440,9 @@ setcur(usize off)
 		return -1;
 	}
 	current->off = current->cur = off;
+	stalerender = 1;
+	if(paused)
+		refresh();
 	return 0;
 }
 
@@ -340,63 +459,6 @@ setloop(vlong off)
 	else
 		setrange(current->from, off);
 	return 0;
-}
-
-int
-setjump(vlong off)
-{
-	return setcur(off) & ~3;
-}
-
-vlong
-p2off(int x)
-{
-	return views + x * T & ~3;
-}
-
-static void
-resetdraw(void)
-{
-	int x;
-	Rectangle viewr;
-
-	x = screen->r.min.x + (current->cur - views) / T;
-	viewr = rectsubpt(screen->r, screen->r.min);
-	statr = screen->r;
-	if(stereo)
-		statr.min.y += (Dy(screen->r) - font->height) / 2 + 1;
-	else
-		statr.min.y = screen->r.max.y - font->height;
-	freeimage(view);
-	view = eallocimage(viewr, 0, DNofill);
-	liner = screen->r;
-	liner.min.x = x;
-	liner.max.x = x + 1;
-	bgscalyl = (viewr.max.y - font->height) / (stereo ? 4 : 2);
-	bgscalyr = viewr.max.y - bgscalyl;
-	bgscalf = 32767. / bgscalyl;
-}
-
-void
-redraw(int all)
-{
-	usize span;
-	Point p;
-
-	lockdisplay(display);
-	T = (vlong)(current->totalsz / zoom / Dx(screen->r)) & ~3;
-	if(T == 0)
-		T = 4;
-	span = Dx(screen->r) * T;
-	viewmax = current->totalsz - span;
-	if(views > viewmax)
-		views = viewmax;
-	viewe = views + span;
-	if(all)
-		resetdraw();
-	unlockdisplay(display);
-	p = Pt(views, viewe);
-	nbsend(drawc, &p);
 }
 
 void
@@ -423,9 +485,12 @@ initdrw(int fuckit)
 		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x8888CCFF);
 		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xEE0000FF);
 	}
-	if((drawc = chancreate(sizeof(Point), 4)) == nil)
+	if((drawc = chancreate(sizeof(int), 1)) == nil
+	// FIXME: fudge until better perceptual fix
+	|| (upyours = chancreate(sizeof(Dot), 32)) == nil)
 		sysfatal("chancreate: %r");
-	if(proccreate(drawsamps, nil, mainstacksize) < 0)
-		sysfatal("proccreate: %r");
 	redraw(1);
+	if(proccreate(drawproc, nil, mainstacksize) < 0
+	|| proccreate(sampleproc, nil, mainstacksize) < 0)
+		sysfatal("proccreate: %r");
 }

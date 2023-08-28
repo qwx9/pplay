@@ -4,8 +4,9 @@
 #include "dat.h"
 #include "fns.h"
 
-usize ndots;
+usize ndots, ntracks;
 Dot *current, *dots;
+Track *tracks;
 
 static int epfd[2];
 
@@ -311,8 +312,11 @@ initcmd(int fd)
 
 	if(loadfile(fd, &d) == nil)
 		sysfatal("initcmd: %r");
+	tracks = emalloc(++ntracks * sizeof *tracks);
 	dots = emalloc(++ndots * sizeof *dots);
 	dots[0] = d;
 	current = dots;
+	*current = d;
+	current->t = tracks;
 	return 0;
 }

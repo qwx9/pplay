@@ -1,6 +1,8 @@
 typedef struct Chunk Chunk;
 typedef struct Dot Dot;
 typedef struct Buf Buf;
+typedef struct Track Track;
+typedef struct Seg Seg;
 
 enum{
 	Rate = 44100,
@@ -18,18 +20,25 @@ struct Chunk{
 	Chunk *left;
 	Chunk *right;
 };
-extern struct Dot{
-	usize cur;
+struct Track{
+	vlong len;
+	s16int *graph[2];
+};
+struct Seg{
+	Track *t;
 	usize from;
 	usize to;
+};
+struct Dot{
+	Seg;
+	usize cur;
 	usize off;
 	usize totalsz;
 	Chunk *norris;
 };
 extern Dot *dots, *current;
-extern usize ndots;
-
-extern int treadsoftly;
+extern usize ndots, ntracks;
+extern Track *tracks;
 
 extern QLock lsync;
 

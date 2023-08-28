@@ -10,60 +10,75 @@
 extern QLock lsync;
 
 int stereo;
-int debug, paused = 1;
+int debug, paused, notriob;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
 static int cat;
-static int afd = -1;
+static Channel *crm114;
 
 static void
-athread(void *)
+aproc(void *)
 {
-	int nerr;
+	int afd, nerr;
 	uchar *b, *bp, buf[Outsz];
 	usize n, m;
 
+	Alt a[] = {
+		{crm114, nil, CHANRCV},
+		{nil, nil, CHANEND}
+	};
 	nerr = 0;
+	afd = -1;
+	paused = 1;
 	for(;;){
-		if(afd < 0 || nerr > 10)
-			return;
+again:
+		if(nerr > 10)
+			break;
+		switch(alt(a)){
+		case 0:
+			if(paused ^= 1){
+				if(!cat)
+					close(afd);
+				afd = -1;
+			}else if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0){
+				fprint(2, "aproc open: %r\n");
+				paused = 1;
+			}
+			if(afd < 0){
+				a[1].op = CHANEND;
+				continue;
+			}else
+				a[1].op = CHANNOBLK;
+			break;
+		case -1:
+			fprint(2, "alt: %r\n");
+			break;
+		}
 		for(bp=buf, m=sizeof buf; bp<buf+sizeof buf; bp+=n, m-=n){
 			if((b = getslice(current, m, &n)) == nil || n <= 0){
-				fprint(2, "athread: %r\n");
+				fprint(2, "aproc: %r\n");
 				nerr++;
-				goto skip;
+				goto again;
 			}
 			memcpy(bp, b, n);
 			advance(current, n);
+			refresh();
 		}
 		if(write(afd, buf, sizeof buf) != sizeof buf){
-			fprint(2, "athread write: %r\n");
-			threadexits("write");
-		}
-		nerr = 0;
-		update(0, 0);
-skip:
-		yield();
+			fprint(2, "aproc write: %r\n");
+			nerr++;
+			sendul(crm114, 1UL);
+		}else
+			nerr = 0;
 	}
+	threadexits(nil);
 }
 
 static void
 toggleplay(void)
 {
-	if(paused ^= 1){
-		if(!cat)
-			close(afd);
-		afd = -1;
-	}else{
-		if((afd = cat ? 1 : open("/dev/audio", OWRITE)) < 0){
-			fprint(2, "toggleplay: %r\n");
-			paused ^= 1;
-			return;
-		}
-		if(threadcreate(athread, nil, 2*mainstacksize) < 0)
-			sysfatal("threadcreate: %r");
-	}
+	sendul(crm114, 1UL);
 }
 
 static char *
@@ -90,7 +105,7 @@ usage(void)
 void
 threadmain(int argc, char **argv)
 {
-	int fd, notriob;
+	int fd;
 	char *p;
 	Mouse mo;
 	Rune r;
@@ -124,23 +139,27 @@ threadmain(int argc, char **argv)
 	};
 	if(setpri(13) < 0)
 		fprint(2, "setpri: %r\n");
+	if((crm114 = chancreate(sizeof(ulong), 2)) == nil)
+		sysfatal("chancreate: %r");
+	if(proccreate(aproc, nil, 16*1024) < 0)
+		sysfatal("threadcreate: %r");
 	toggleplay();
 	for(;;){
 		switch(alt(a)){
 		case 0:
-			qlock(&lsync);
+			lockdisplay(display);
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
-			mo = mc->Mouse;
+			unlockdisplay(display);
 			redraw(1);
-			qunlock(&lsync);
+			mo = mc->Mouse;
 			break;
 		case 1:
 			if(eqpt(mo.xy, ZP))
 				mo = mc->Mouse;
 			switch(mc->buttons){
-			case 1: setjump(p2off(mc->xy.x - screen->r.min.x)); if(paused) update(0, 0); break;
-			case 2: setloop(p2off(mc->xy.x - screen->r.min.x)); if(paused) update(0, 0); break;
+			case 1: setjump(view2ss(mc->xy.x - screen->r.min.x)); break;
+			case 2: setloop(view2ss(mc->xy.x - screen->r.min.x)); break;
 			case 4: setpan(mo.xy.x - mc->xy.x); break;
 			case 8: setzoom(1, 1); break;
 			case 16: setzoom(-1, 1); break;
@@ -155,7 +174,7 @@ threadmain(int argc, char **argv)
 			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
 			case 'b': setjump(current->from); break;
-			case Kesc: setrange(0, current->totalsz); update(0, 0); break;
+			case Kesc: setrange(0, current->totalsz); break;
 			case '\n': zoominto(current->from, current->to); break;
 			case 'z': zoominto(0, current->totalsz); break;
 			case '-': setzoom(-1, 0); break;
@@ -168,8 +187,8 @@ threadmain(int argc, char **argv)
 				if((p = prompt(r)) == nil || strlen(p) == 0)
 					break;
 				switch(cmd(p)){
-				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); update(0, 0); break;
-				case 0: update(0, 0); break;
+				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); break;
+				case 0: refresh(); break;
 				case 1: redraw(0); break;
 				case 2: redraw(1); break;
 				}
