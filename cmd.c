@@ -148,10 +148,10 @@ rproc(void *efd)
 	qlock(&lsync);
 	chold(c, &d);
 	*current = d;
+	qunlock(&lsync);
 	if(paste(nil) < 0)
 		fprint(2, "paste: %r\n");
-	qunlock(&lsync);
-	redraw(0);
+	redraw(1);
 	threadexits(nil);
 }
 
