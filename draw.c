@@ -304,6 +304,7 @@ sampleproc(void*)
 		working = 1;
 		stalerender = 1;
 		sample(d);
+		refresh();
 		working = 0;
 	}
 }
@@ -345,6 +346,8 @@ redraw(int all)
 	if(all)
 		resetdraw();
 	unlockdisplay(display);
+	if(paused)
+		refresh();
 	/* FIXME: this overloading is stupid; just fork for each? have multiple
 	 * workers to begin with à la page? */
 	d = *current;
