@@ -224,6 +224,7 @@ newdot(Dot *dp)
 	d.cur = d.from = dp->from < d.totalsz ? dp->from : 0;
 	d.to = d.totalsz;
 	d.off = -1;
+	d.t = dp->t;
 	return d;
 }
 
@@ -526,8 +527,8 @@ loadfile(int fd, Dot *d)
 		b->buf = erealloc(b->buf, c->len, b->bufsz);
 		b->bufsz = c->len;
 	}
-	memset(d, 0, sizeof *d);
 	d->norris = c;
+	d->from = 0;
 	*d = newdot(d);
 	return c;
 }

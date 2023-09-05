@@ -310,13 +310,13 @@ initcmd(int fd)
 {
 	Dot d;
 
+	tracks = emalloc(++ntracks * sizeof *tracks);
+	d.t = tracks;
 	if(loadfile(fd, &d) == nil)
 		sysfatal("initcmd: %r");
-	tracks = emalloc(++ntracks * sizeof *tracks);
 	dots = emalloc(++ndots * sizeof *dots);
 	dots[0] = d;
 	current = dots;
 	*current = d;
-	current->t = tracks;
 	return 0;
 }
