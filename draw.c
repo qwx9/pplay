@@ -438,7 +438,7 @@ int
 setjump(vlong off)
 {
 	off &= ~3;
-	if(off < current->from || off > current->to - Outsz){
+	if(off < current->from || off > current->to - Sampsz){
 		werrstr("cannot jump outside of loop bounds");
 		return -1;
 	}
