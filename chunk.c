@@ -377,7 +377,7 @@ cinsert(Dot *d, Chunk *c)
 	usize off;
 	Chunk *p1, *l, *r;
 
-	assert(d->off != -1ULL);
+	assert(d->off != -1);
 	p1 = p2c(d->off, &off, d);
 	l = splitchunk(p1, 0, off);
 	r = splitchunk(p1, off, p1->len);
@@ -406,7 +406,7 @@ cpaste(Dot *d)
 	}
 	dprint(d->norris, "cpaste dot=%Δ hold=%Δ\n", d, &hold.Dot);
 	c = clone(hold.c, hold.c->left);
-	return d->off == -1ULL ? creplace(d, c) : cinsert(d, c);
+	return d->off == -1 ? creplace(d, c) : cinsert(d, c);
 }
 
 void

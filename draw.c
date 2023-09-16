@@ -428,7 +428,7 @@ setrange(usize from, usize to)
 	current->to = to;
 	if(current->cur < from || current->cur >= to)
 		current->cur = from;
-	current->off = -1ULL;
+	current->off = -1;
 	stalerender = 1;
 	if(paused)
 		refresh();
