@@ -63,7 +63,7 @@ again:
 			}
 			memcpy(bp, b, n);
 			advance(current, n);
-			refresh();
+			refresh(Drawcur);
 		}
 		if(write(afd, buf, sizeof buf) != sizeof buf){
 			fprint(2, "aproc write: %r\n");
@@ -90,7 +90,7 @@ prompt(Rune r)
 	chartorune(&q, buf);
 	if(q != r)
           snprint(buf, sizeof buf, "%C", r);
-	if(enter(nil, buf, sizeof(buf)-UTFmax, mc, kc, nil) < 0)
+	if(enter("cmd:", buf, sizeof(buf)-UTFmax, mc, kc, _screen) < 0)
 		return nil;
 	return buf;
 }
@@ -170,7 +170,7 @@ threadmain(int argc, char **argv)
 			switch(r){
 			case Kdel:
 			case 'q': threadexitsall(nil);
-			case 'D': debug ^= 1; debugdraw ^= 1; break;
+			case 'D': debug ^= 1; debugdraw ^= 1; refresh(Drawrender); break;
 			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
 			case 'b': setjump(current->from); break;
@@ -184,11 +184,13 @@ threadmain(int argc, char **argv)
 			case Kleft: setpage(-1); break;
 			case Kright: setpage(1); break;
 			default:
-				if((p = prompt(r)) == nil || strlen(p) == 0)
+				if((p = prompt(r)) == nil || strlen(p) == 0){
+					refresh(Drawrender);
 					break;
+				}
 				switch(cmd(p)){
 				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); break;
-				case 0: refresh(); break;
+				case 0: refresh(Drawall); break;
 				case 1: redraw(0); break;
 				case 2: redraw(1); break;
 				}

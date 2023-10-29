@@ -42,6 +42,12 @@ extern Track *tracks;
 
 extern QLock lsync;
 
+enum{
+	Drawcur,
+	Drawrender,
+	Drawall,
+};
+
 extern int stereo;
 extern int debug, paused;
 extern int debugdraw;

@@ -194,40 +194,39 @@ drawstat(void)
 }
 
 static void
-update(void)
-{
-	lockdisplay(display);
-	if(stalerender || working){
-		if(!working)
-			stalerender = 0;
-		render();
-		draw(screen, rectaddpt(view->r, screen->r.min), view, nil, ZP);
-	}else
-		erasemark(linepos);
-	renderpos(current->cur, col[Cline], 1);
-	linepos = current->cur;
-	drawstat();
-	flushimage(display, 1);
-	unlockdisplay(display);
-}
-
-static void
 drawproc(void*)
 {
+	int what;
+
 	threadsetname("drawer");
 	for(;;){
-		if(recv(drawc, nil) < 0){
+		if(recv(drawc, &what) < 0){
 			fprint(2, "drawproc: %r\n");
 			break;
 		}
-		update();
+		lockdisplay(display);
+		if(what == Drawcur)
+			erasemark(linepos);
+		else{
+			if(what == Drawrender || stalerender || working){
+				if(!working)
+					stalerender = 0;
+				render();
+			}
+			draw(screen, rectaddpt(view->r, screen->r.min), view, nil, ZP);
+		}
+		renderpos(current->cur, col[Cline], 1);
+		linepos = current->cur;
+		drawstat();
+		flushimage(display, 1);
+		unlockdisplay(display);
 	}
 }
 
 void
-refresh(void)
+refresh(int what)
 {
-	nbsend(drawc, nil);
+	nbsend(drawc, &what);
 }
 
 static void
@@ -304,7 +303,7 @@ sampleproc(void*)
 		working = 1;
 		stalerender = 1;
 		sample(d);
-		refresh();
+		refresh(Drawall);
 		working = 0;
 	}
 }
@@ -347,7 +346,7 @@ redraw(int all)
 		resetdraw();
 	unlockdisplay(display);
 	if(paused)
-		refresh();
+		refresh(Drawall);
 	/* FIXME: this overloading is stupid; just fork for each? have multiple
 	 * workers to begin with à la page? */
 	d = *current;
@@ -430,8 +429,7 @@ setrange(usize from, usize to)
 		current->cur = from;
 	current->off = -1;
 	stalerender = 1;
-	if(paused)
-		refresh();
+	refresh(Drawrender);
 }
 
 int
@@ -444,8 +442,7 @@ setjump(vlong off)
 	}
 	current->off = current->cur = off;
 	stalerender = 1;
-	if(paused)
-		refresh();
+	refresh(Drawrender);
 	return 0;
 }
 
