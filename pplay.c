@@ -169,7 +169,7 @@ threadmain(int argc, char **argv)
 		case 2:
 			switch(r){
 			case Kdel:
-			case 'q': threadexitsall(nil);
+			case 'q': quit();
 			case 'D': debug ^= 1; debugdraw ^= 1; refresh(Drawrender); break;
 			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;

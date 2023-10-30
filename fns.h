@@ -8,6 +8,7 @@ void	chold(Chunk*, Dot*);
 void	ccut(Dot*);
 void	ccrop(Dot*);
 Chunk*	loadfile(int, Dot*);
+void	quit(void);
 int	cmd(char*);
 int	initcmd(int);
 void	refresh(int);

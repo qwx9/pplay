@@ -126,6 +126,7 @@ wproc(void *efd)
 {
 	int fd;
 
+	threadsetgrp(1);
 	fd = (intptr)efd;
 	writebuf(fd);
 	close(fd);
@@ -239,6 +240,15 @@ writeto(char *arg)
 	return 0;
 }
 
+void
+quit(void)
+{
+	threadsetgrp(1);
+	threadkillgrp(0);
+	threadintgrp(0);
+	threadexits(nil);
+}
+
 int
 cmd(char *s)
 {
@@ -270,7 +280,7 @@ cmd(char *s)
 	case 'j': x = jumpto(s); break;
 	//case 'm': x = mark(s); break;
 	case 'p': x = paste(s); break;
-	case 'q': threadexitsall(nil);
+	case 'q': quit();
 	case 'r': x = readfrom(s); break;
 	case 's': x = replicate(s); break;
 	case 'U': x = unpop(s); break;
