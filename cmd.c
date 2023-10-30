@@ -140,7 +140,8 @@ rproc(void *efd)
 	Chunk *c;
 
 	d = *current;
-	d.off = -1;
+	if(d.from != 0 && d.to != d.totalsz)
+		d.off = -1;
 	fd = (intptr)efd;
 	if((c = loadfile(fd, &cd)) == nil){
 		fprint(2, "failed reading from pipe: %r");
