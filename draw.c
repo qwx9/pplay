@@ -205,16 +205,13 @@ drawproc(void*)
 			break;
 		}
 		lockdisplay(display);
-		if(what == Drawcur)
-			erasemark(linepos);
-		else{
-			if(what == Drawrender || stalerender || working){
-				if(!working)
-					stalerender = 0;
-				render();
-			}
+		if(what == Drawrender || stalerender || working){
+			if(!working)
+				stalerender = 0;
+			render();
 			draw(screen, rectaddpt(view->r, screen->r.min), view, nil, ZP);
-		}
+		}else
+			erasemark(linepos);
 		renderpos(current->cur, col[Cline], 1);
 		linepos = current->cur;
 		drawstat();
