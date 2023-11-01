@@ -4,31 +4,30 @@ pplay \- visual PCM audio player and editor
 .SH SYNOPSIS
 .B audio/pplay
 [
-.B -Dbc
+.B -bc
 ] [
-.B pcmfile
+.B pcmfiles..
 ]
 .SH DESCRIPTION
 .I Pplay
-is a PCM audio player which displays a time-domain graphical plot of the data
-and allows for some simple editing operations.
-It operates on the same raw format used by the audio device (see
+is a PCM audio player displaying a time-domain graphical plot of the data
+and allowing for some simple editing operations
+or piping to/from external programs.
+It operates on raw PCM audio, the same format used by the audio device (see
 .IR audio (3)).
 .PP
-At startup, all input is loaded in its entirety into memory,
-either from
-.B pcmfile
-if provided, or from standard in.
-It then writes samples to
-.BR /dev/audio ,
+All input is fully loaded into memory,
+either from one or more input files
+.BR pcmfiles ,
+or from standard in if run without arguments.
+It loops through the entire buffer or a selected portion forever,
+writing samples to
+.B /dev/audio
 unless
 .B -c
 is specified.
 .SS "Command line parameters"
-.TF "-D"
-.TP
-.B -D
-Turn verbose debugging info on immediately
+.TF "-b"
 .TP
 .B -b
 Use inverted colors (dark background)
@@ -45,7 +44,7 @@ Key commands:
 Quit
 .TP
 .B D
-Toggle debug tracing and draws
+Toggle drawing cut/insert positions in the buffer
 .TP
 .B S
 Toggle stereo display (default left channel only)
@@ -100,8 +99,8 @@ Pan view horizontally
 .I Pplay
 loops indefinitely an interval referred to as the
 .IR dot .
-The dot is simply the start and end loop points,
-by default the data's start and end.
+The dot is simply the start (left) and end (right) loop points,
+by default the data's beginning and end.
 The current playback position within it is refered to as the
 .IR cursor .
 The dot is set using the middle mouse button and with respect to the cursor:
@@ -109,9 +108,9 @@ if clicking to its left, the left loop point is set,
 if to the right, the right loop point is set.
 The cursor is set with the left mouse button
 and may never escape the dot.
-The last left mouse click is saved as the
+The last left mouse click is referred to as the
 .I anchor
-point, used in editing.
+point.
 Dot, cursor and anchor are indicated
 by distinctly colored vertical lines.
 .SS "Display"
@@ -127,7 +126,7 @@ or in the middle (stereo) of the graphical view.
 The first value is the
 .IR period ,
 or number of samples per vertical pixel column.
-The next fields are offsets from the start of the data
+The next fields are offsets from the beginning of the data
 given in the form 
 .IR [hh:mm:ss.tt]\ (samples) ,
 where the first part is in time format (see
@@ -137,7 +136,7 @@ The first field is for the current position.
 If set, either the dot or only the anchor follow it.
 .SS "Editing"
 Commands:
-.TF "r file"
+.TF "L sample"
 .TP
 .BI <\  cmd
 Pipe output of a shell command into dot
@@ -148,20 +147,37 @@ Pipe dot to a shell command and read back its output into dot
 .BI |\  cmd
 Pipe dot to a shell command
 .TP
+.BI L\  sample
+Set left bound/loop point to
+.I sample
+.TP
+.BI R\  sample
+Set right bound/loop point to
+.I sample
+.TP
+.B U
+Redo an edit and restore dot
+.TP
 .B c
 Set snarf buffer to the contents of the dot
 .TP
 .B d
 Cut dot, replacing snarf buffer
 .TP
+.BI j\  sample
+Jump and set current position to
+.I sample
+.TP
 .B p
 Paste snarf buffer into dot or insert at the cursor
 .TP
 .BI r\  file
-Read file into dot or at the cursor
+Read
+.I file
+into dot or at the cursor
 .TP
 .B s
-Show dot by piping it to a new
+Replicate dot by piping it to a new
 .IR pplay (1)
 instance
 .TP
@@ -169,7 +185,8 @@ instance
 Undo an edit and dot change
 .TP
 .BI w\  file
-Write dot to file
+Write dot to
+.I file
 .TP
 .B x
 Crop to dot (exclusive cut); does
@@ -183,58 +200,63 @@ Commands are single character codes,
 and all following text is used as an arguments list.
 .PP
 Editing is performed upon a range or at a position:
-the dot if a bound is set, or the anchor if iet is set, or the entire data.
+the dot's range if the left or right bound is set, else at the anchor if it exists, else on the entire data.
 .PP
-Operations are entirely decomposable into a series of one or more
-insertions or deletions
-.RI ( indels ).
-Insertions place new data at an offset from the start,
-either the left bound of the dot or the anchor.
-Deletions act upon a range, either the dot or the entire data.
-The
+Behavior depends on the dot.
+If a left or right bound is set,
+inserts replace the range and deletions delete it.
+Otherwise, if an anchor point exists,
+insertion inserts a buffer at its position
+while deletion is disallowed.
+If nothing is set,
+insertion replaces the entire buffer,
+and deletion is also disallowed.
+.PP
 .BR < ,
-.BR r ,
+.BR r\  (read),
 and
-.B p
-commands either insert new data at the anchor point,
-or replace the contents of the dot.
-In the latter case, two operations occur, first to delete the dot,
-then to insert the new data.
+.BR p\  (paste)
+insert data from an external command or the copy buffer,
+following the rules above.
 .PP
 The
-.B u
-(undo) command reverts a single indel and restores the dot as it were before.
-Compound operations are not undone in one go.
-For example, undoing a paste/replace command will require two commands.
-.I Undo
-is not infinite and there currently is no
-.I redo
-command.
+.BR u\  (undo)
+command reverts a single indel and restores the dot as it were before,
+and
+.BR U\  (redo)
+similarly replays the last action that was undone.
+Undo is infinite.
 .PP
 Commands
 .BR < ,\  ^\ and\ |
-need a valid
+require a valid
 .IR rc (1)
-expression, which is then passed uninterpreted.
+expression, passed uninterpreted (quoting is unnecessary).
 In other words, expressions such as:
 .IP
 .EX
 | stretch -r1.2 | norm -f 2 | audio/wavenc > seymourbutz.wav
 .EE
 .PP
-will be passed as a single string to and evaluated in a subshell,
+are passed as a single string and then evaluated in a subshell,
 with the dot written to its standard in.
 .I Pplay
 does not handle any subprocess' abnormal exits in any way.
 .PP
 File i/o commands
-.BR r ,\  w
+.BR r\  and\  w
 prompt for a pathname which is also uninterpreted.
 Consequently, commands and i/o may fail once actually executed;
 in case
 .I pplay
 was reading from a file or pipe,
 the partial content already loaded will not be discarded.
+External commands launched from within
+.I pplay
+.B are not
+interrupted on exit,
+causing it to appear stuck.
+Multiple commands may run concurrently.
 .SS Memory management
 No data loaded into memory is ever freed unless it can be
 guaranteed to never be used again.
@@ -244,6 +266,8 @@ and nothing is ever freed.
 However, memory is never duplicated.
 Therefore, it is dangerous to load large amounts of data,
 but once loaded, memory usage will not grow much.
+The maximum size of a single buffer is bound by the limits of
+.IR malloc (2).
 .SH EXAMPLES
 Use
 .IR play (1)
@@ -261,18 +285,15 @@ to decode any known audio format:
 .I Pplay
 first spawned on 9front (October, 2017), beyond the environment.
 .SH BUGS
-Undo is still unreliable.
-.PP
-Drawing halts while playback is paused.
-.PP
-Mousing, in particular for panning, can be uncomfortable or annoying.
-.PP
-There are no safeguards against races when writing to file.
-.PP
-The data structure implementation underlying the editing commands
-is, despite much effort to the contrary, still prone to off-by-ones
-and other bugs.
+Undo may irreversibly duplicate buffer contents,
+and there are still some issues with what is used as a dot
+when replacing content.
 Trust, but save often.
+.PP
+An external command that never exits will freeze
+.I pplay
+forever on exit due to the reliance on
+.BR thread (2).
 .PP
 Any unintended interruption in playback due to scheduling,
 or slower than instaneous redraws, are considered bugs,

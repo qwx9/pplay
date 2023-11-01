@@ -10,7 +10,6 @@ Track *tracks;
 
 static int epfd[2];
 
-// FIXME: cursor moves too fast
 static int
 setright(char *s)
 {
@@ -159,7 +158,6 @@ rproc(void *efd)
 	threadexits(nil);
 }
 
-// FIXME: make sure writes complete even after exit
 static int
 pipeline(char *arg, int rr, int wr)
 {
