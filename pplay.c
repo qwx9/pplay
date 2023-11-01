@@ -98,7 +98,7 @@ prompt(Rune r)
 static void
 usage(void)
 {
-	fprint(2, "usage: %s [-Dbc] [pcm]\n", argv0);
+	fprint(2, "usage: %s [-bc] [pcm]\n", argv0);
 	threadexits("usage");
 }
 
@@ -112,7 +112,7 @@ threadmain(int argc, char **argv)
 
 	notriob = 0;
 	ARGBEGIN{
-	case 'D': debug = 1; debugdraw = 1; break;
+	case 'D': debug = 1; break;
 	case 'b': notriob = 1; break;
 	case 'c': cat = 1; break;
 	default: usage();
@@ -170,7 +170,7 @@ threadmain(int argc, char **argv)
 			switch(r){
 			case Kdel:
 			case 'q': quit();
-			case 'D': debug ^= 1; debugdraw ^= 1; refresh(Drawrender); break;
+			case 'D': debugdraw ^= 1; refresh(Drawrender); break;
 			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
 			case 'b': setjump(current->from); break;
