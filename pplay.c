@@ -62,7 +62,7 @@ again:
 				goto again;
 			}
 			memcpy(bp, b, n);
-			advance(current, n);
+			advance(n);
 			refresh(Drawcur);
 		}
 		if(write(afd, buf, sizeof buf) != sizeof buf){
@@ -105,7 +105,6 @@ usage(void)
 void
 threadmain(int argc, char **argv)
 {
-	int fd;
 	char *p;
 	Mouse mo;
 	Rune r;
@@ -120,11 +119,11 @@ threadmain(int argc, char **argv)
 	fmtinstall(L'Δ', Δfmt);
 	fmtinstall(L'χ', χfmt);
 	fmtinstall(L'τ', τfmt);
-	if((fd = *argv != nil ? open(*argv, OREAD) : 0) < 0)
-		sysfatal("open: %r");
-	if(initcmd(fd) < 0)
-		sysfatal("init: %r");
-	close(fd);
+	if(*argv != nil)
+		while(*argv != nil)
+			addtrack(*argv++);
+	else
+		addtrack(nil);
 	initdrw(notriob);
 	if((kc = initkeyboard(nil)) == nil)
 		sysfatal("initkeyboard: %r");

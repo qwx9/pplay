@@ -4,8 +4,8 @@
 #include "dat.h"
 #include "fns.h"
 
-usize ndots, ntracks;
-Dot *current, *dots;
+usize ntracks;
+Dot *current;
 Track *tracks;
 
 static int epfd[2];
@@ -241,6 +241,7 @@ writeto(char *arg)
 void
 quit(void)
 {
+	// FIXME: no, have yield/sleep/...
 	threadsetgrp(1);
 	threadkillgrp(0);
 	threadintgrp(0);
@@ -291,8 +292,8 @@ cmd(char *s)
 	return x;
 }
 
-int
-advance(Dot *d, usize n)
+static void
+advanceone(Dot *d, usize n)
 {
 	usize m;
 
@@ -304,7 +305,15 @@ advance(Dot *d, usize n)
 		if(d->cur == d->to)
 			d->cur = d->from;
 	}
-	return 0;
+}
+
+void
+advance(usize n)
+{
+	Track *t;
+
+	for(t=tracks; t<tracks+ntracks; t++)
+		advanceone(t, n);
 }
 
 static void
@@ -315,18 +324,22 @@ catch(void *, char *msg)
 	noted(NDFLT);
 }
 
-int
-initcmd(int fd)
+void
+addtrack(char *path)
 {
-	Dot d;
+	int fd;
+	Track *t;
 
-	tracks = emalloc(++ntracks * sizeof *tracks);
-	d.t = tracks;
-	if(loadfile(fd, &d) == nil)
+	if((fd = path != nil ? open(path, OREAD) : 0) < 0)
+		sysfatal("open: %r");
+	tracks = erealloc(tracks, (ntracks+1) * sizeof *tracks, ntracks * sizeof *tracks);
+	t = tracks + ntracks++;
+	if(loadfile(fd, t) == nil)
 		sysfatal("initcmd: %r");
-	dots = emalloc(++ndots * sizeof *dots);
-	dots[0] = d;
-	current = dots;
-	*current = d;
-	return 0;
+	close(fd);
+	// FIXME
+	t->Dot.t = t;
+	if(current != nil)
+		return;
+	current = &t->Dot;
 }

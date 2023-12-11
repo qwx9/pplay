@@ -3,6 +3,17 @@ typedef struct Dot Dot;
 typedef struct Buf Buf;
 typedef struct Track Track;
 typedef struct Seg Seg;
+typedef struct Punkt Punkt;
+typedef struct Rekt Rekt;
+
+struct Punkt{
+	int x;
+	int y;
+};
+struct Rekt{
+	Punkt min;
+	Punkt max;
+};
 
 enum{
 	Rate = 44100,
@@ -13,21 +24,17 @@ enum{
 	Chunksz = Sampsz * Rate,
 };
 #pragma incomplete Buf
+struct Seg{
+	Track *t;
+	usize from;
+	usize to;
+};
 struct Chunk{
 	Buf *b;
 	usize boff;
 	usize len;
 	Chunk *left;
 	Chunk *right;
-};
-struct Track{
-	vlong len;
-	s16int *graph[2];
-};
-struct Seg{
-	Track *t;
-	usize from;
-	usize to;
 };
 struct Dot{
 	Seg;
@@ -36,8 +43,15 @@ struct Dot{
 	usize totalsz;
 	Chunk *norris;
 };
-extern Dot *dots, *current;
-extern usize ndots, ntracks;
+struct Track{
+	Dot;
+	Rekt;
+	// FIXME: both for samples:
+	vlong len;
+	s16int *graph[2];
+};
+extern Dot *current;
+extern usize ntracks;
 extern Track *tracks;
 
 extern QLock lsync;

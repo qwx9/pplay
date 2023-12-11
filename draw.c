@@ -5,6 +5,10 @@
 #include "dat.h"
 #include "fns.h"
 
+/* urgh */
+typedef Point Punkt;
+typedef Rectangle Rekt;
+
 QLock lsync;
 int debugdraw;
 
@@ -305,6 +309,22 @@ sampleproc(void*)
 	}
 }
 
+void
+resizetracks(void)
+{
+	int dy;
+	Track *t;
+	Rectangle r;
+
+	dy = screen->r.max.y / ntracks;
+	r = Rpt(screen->r.min, Pt(screen->r.max.x, dy));
+	for(t=tracks; t<tracks+ntracks; t++){
+		t->Rectangle = r;
+		r.min.y += dy;
+		r.max.y += dy;
+	}
+}
+
 static void
 resetdraw(void)
 {
@@ -322,6 +342,7 @@ resetdraw(void)
 	bgscalyl = (viewr.max.y - font->height) / (stereo ? 4 : 2);
 	bgscalyr = viewr.max.y - bgscalyl;
 	bgscalf = 32767. / bgscalyl;
+	resizetracks();
 }
 
 void
