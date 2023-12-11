@@ -25,6 +25,7 @@ vlong	view2ss(int);
 void	redraw(int);
 void	initdrw(int);
 void	advance(usize);
+void	setcurrent(Punkt);
 Chunk*	p2c(usize, usize*, Dot*);
 int	setpos(usize);
 uchar*	getslice(Dot*, usize, usize*);

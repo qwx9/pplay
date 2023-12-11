@@ -2,9 +2,10 @@ typedef struct Chunk Chunk;
 typedef struct Dot Dot;
 typedef struct Buf Buf;
 typedef struct Track Track;
-typedef struct Seg Seg;
 typedef struct Punkt Punkt;
 typedef struct Rekt Rekt;
+
+typedef intptr ssize;
 
 struct Punkt{
 	int x;
@@ -24,11 +25,6 @@ enum{
 	Chunksz = Sampsz * Rate,
 };
 #pragma incomplete Buf
-struct Seg{
-	Track *t;
-	usize from;
-	usize to;
-};
 struct Chunk{
 	Buf *b;
 	usize boff;
@@ -36,8 +32,11 @@ struct Chunk{
 	Chunk *left;
 	Chunk *right;
 };
+// FIXME: some stuff goes in track
 struct Dot{
-	Seg;
+	ssize trk;
+	usize from;
+	usize to;
 	usize cur;
 	usize off;
 	usize totalsz;

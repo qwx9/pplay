@@ -333,13 +333,10 @@ addtrack(char *path)
 	if((fd = path != nil ? open(path, OREAD) : 0) < 0)
 		sysfatal("open: %r");
 	tracks = erealloc(tracks, (ntracks+1) * sizeof *tracks, ntracks * sizeof *tracks);
-	t = tracks + ntracks++;
+	t = tracks + ntracks;
+	t->trk = ntracks++;
 	if(loadfile(fd, t) == nil)
 		sysfatal("initcmd: %r");
 	close(fd);
-	// FIXME
-	t->Dot.t = t;
-	if(current != nil)
-		return;
 	current = &t->Dot;
 }

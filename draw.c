@@ -237,21 +237,23 @@ sample(Dot d)
 	usize k;
 	uchar *p, *e;
 	s16int s, *l, *r, *le;
+	Track *t;
 	vlong N;
 
+	t = tracks + d.trk;	// FIXME: just pass track?
 	N = (d.to - d.from) / (T * sampwidth);
-	if(d.t->len < 2*N){	/* min, max */
-		d.t->graph[0] = erealloc(d.t->graph[0],
-			2*N * sizeof *d.t->graph[0],
-			d.t->len * sizeof *d.t->graph[0]);
-		d.t->graph[1] = erealloc(d.t->graph[1],
-			2*N * sizeof *d.t->graph[1],
-			d.t->len * sizeof *d.t->graph[1]);
+	if(t->len < 2*N){	/* min, max */
+		t->graph[0] = erealloc(t->graph[0],
+			2*N * sizeof *t->graph[0],
+			t->len * sizeof *t->graph[0]);
+		t->graph[1] = erealloc(t->graph[1],
+			2*N * sizeof *t->graph[1],
+			t->len * sizeof *t->graph[1]);
 	}
-	d.t->len = 2*N;
-	l = d.t->graph[0];
-	r = d.t->graph[1];
-	le = l + d.t->len;
+	t->len = 2*N;
+	l = t->graph[0];
+	r = t->graph[1];
+	le = l + t->len;
 	while(l < le){
 		n = T * sampwidth;
 		lmin = lmax = rmin = rmax = 0;
@@ -310,6 +312,26 @@ sampleproc(void*)
 }
 
 void
+setcurrent(Point o)
+{
+	int dy;
+	Track *t;
+	Rectangle r;
+
+	dy = screen->r.max.y / ntracks;
+	r = Rpt(screen->r.min, Pt(screen->r.max.x, dy));
+	for(t=tracks; t<tracks+ntracks; t++){
+		if(ptinrect(o, r)){
+			current = &t->Dot;
+			return;
+		}
+		r.min.y += dy;
+		r.max.y += dy;
+	}
+	sysfatal("setcurrent: phase error");
+}
+
+void
 resizetracks(void)
 {
 	int dy;
@@ -349,6 +371,7 @@ void
 redraw(int all)
 {
 	usize span;
+	Track *t;
 	Dot d;
 
 	lockdisplay(display);
@@ -365,12 +388,13 @@ redraw(int all)
 	unlockdisplay(display);
 	if(paused)
 		refresh(Drawall);
-	/* FIXME: this overloading is stupid; just fork for each? have multiple
-	 * workers to begin with à la page? */
-	d = *current;
-	d.from = d.cur = views;
-	d.to = viewe;
-	nbsend(upyours, &d);
+	// FIXME: one worker per file?
+	for(t=tracks; t<tracks+ntracks; t++){
+		d = t->Dot;
+		d.from = d.cur = views;
+		d.to = viewe;
+		nbsend(upyours, &d);
+	}
 }
 
 void

@@ -55,6 +55,7 @@ again:
 			fprint(2, "alt: %r\n");
 			break;
 		}
+		// FIXME: multitrack mixing
 		for(bp=buf, m=sizeof buf; bp<buf+sizeof buf; bp+=n, m-=n){
 			if((b = getslice(current, m, &n)) == nil || n <= 0){
 				fprint(2, "aproc: %r\n");
@@ -156,6 +157,9 @@ threadmain(int argc, char **argv)
 		case 1:
 			if(eqpt(mo.xy, ZP))
 				mo = mc->Mouse;
+			// FIXME: multitrack drawing first
+			//if(mc->buttons != 0)
+			//	setcurrent(mc->xy);
 			switch(mc->buttons){
 			case 1: setjump(view2ss(mc->xy.x - screen->r.min.x)); break;
 			case 2: setloop(view2ss(mc->xy.x - screen->r.min.x)); break;

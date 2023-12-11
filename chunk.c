@@ -224,7 +224,7 @@ newdot(Dot *dp)
 	d.cur = d.from = dp->from < d.totalsz ? dp->from : 0;
 	d.to = d.totalsz;
 	d.off = -1;
-	d.t = dp->t;
+	d.trk = dp->trk;
 	return d;
 }
 
@@ -484,7 +484,7 @@ getslice(Dot *d, usize want, usize *have)
 	Chunk *c;
 
 	if(d->cur >= d->totalsz){
-		werrstr("out of bounds");
+		werrstr("out of bounds: %zd >= %zd", d->cur, d->totalsz);
 		*have = 0;
 		return nil;
 	}
