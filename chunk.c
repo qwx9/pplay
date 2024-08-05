@@ -61,12 +61,10 @@ printchunks(Chunk *r)
 	c = r;
 	len = 0;
 	do{
-		fprint(2, "\t%χ\toff=%08zux\n", c, len);
 		assert(c->right->left == c);
 		len += c->len;
 		c = c->right;
 	}while(c != r);
-	fprint(2, "\n");
 }
 
 void

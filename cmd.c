@@ -238,16 +238,6 @@ writeto(char *arg)
 	return 0;
 }
 
-void
-quit(void)
-{
-	// FIXME: no, have yield/sleep/...
-	threadsetgrp(1);
-	threadkillgrp(0);
-	threadintgrp(0);
-	threadexits(nil);
-}
-
 int
 cmd(char *s)
 {
@@ -279,7 +269,7 @@ cmd(char *s)
 	case 'j': x = jumpto(s); break;
 	//case 'm': x = mark(s); break;
 	case 'p': x = paste(s); break;
-	case 'q': quit();
+	case 'q': threadexitsall(nil);
 	case 'r': x = readfrom(s); break;
 	case 's': x = replicate(s); break;
 	case 'U': x = unpop(s); break;

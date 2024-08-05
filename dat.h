@@ -38,13 +38,14 @@ struct Dot{
 	usize from;
 	usize to;
 	usize cur;
-	usize off;
+	ssize off;
 	usize totalsz;
 	Chunk *norris;
 };
 struct Track{
 	Dot;
 	Rekt;
+	int working;
 	// FIXME: both for samples:
 	vlong len;
 	s16int *graph[2];
