@@ -1,20 +1,8 @@
 typedef struct Chunk Chunk;
 typedef struct Dot Dot;
 typedef struct Buf Buf;
-typedef struct Track Track;
-typedef struct Punkt Punkt;
-typedef struct Rekt Rekt;
 
 typedef intptr ssize;
-
-struct Punkt{
-	int x;
-	int y;
-};
-struct Rekt{
-	Punkt min;
-	Punkt max;
-};
 
 enum{
 	Rate = 44100,
@@ -32,7 +20,6 @@ struct Chunk{
 	Chunk *left;
 	Chunk *right;
 };
-// FIXME: some stuff goes in track
 struct Dot{
 	ssize trk;
 	usize from;
@@ -42,17 +29,8 @@ struct Dot{
 	usize totalsz;
 	Chunk *norris;
 };
-struct Track{
-	Dot;
-	Rekt;
-	int working;
-	// FIXME: both for samples:
-	vlong len;
-	s16int *graph[2];
-};
+extern Dot dot;
 extern Dot *current;
-extern usize ntracks;
-extern Track *tracks;
 
 extern QLock lsync;
 

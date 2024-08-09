@@ -4,9 +4,8 @@
 #include "dat.h"
 #include "fns.h"
 
-usize ntracks;
+Dot dot;
 Dot *current;
-Track *tracks;
 
 static int epfd[2];
 
@@ -300,10 +299,7 @@ advanceone(Dot *d, usize n)
 void
 advance(usize n)
 {
-	Track *t;
-
-	for(t=tracks; t<tracks+ntracks; t++)
-		advanceone(t, n);
+	advanceone(&dot, n);
 }
 
 static void
@@ -318,15 +314,11 @@ void
 addtrack(char *path)
 {
 	int fd;
-	Track *t;
 
 	if((fd = path != nil ? open(path, OREAD) : 0) < 0)
 		sysfatal("open: %r");
-	tracks = erealloc(tracks, (ntracks+1) * sizeof *tracks, ntracks * sizeof *tracks);
-	t = tracks + ntracks;
-	t->trk = ntracks++;
-	if(loadfile(fd, t) == nil)
+	if(loadfile(fd, &dot) == nil)
 		sysfatal("initcmd: %r");
 	close(fd);
-	current = &t->Dot;
+	current = &dot;
 }
