@@ -30,14 +30,13 @@ struct Dot{
 	Chunk *norris;
 };
 extern Dot dot;
-extern Dot *current;
 
 extern QLock lsync;
 
 enum{
-	Drawcur,
-	Drawrender,
-	Drawall,
+	Drawcur = 1<<0,
+	Drawrender = 1<<1,
+	Drawall = 1<<2,
 };
 
 extern int stereo;

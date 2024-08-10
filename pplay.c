@@ -55,9 +55,8 @@ again:
 			fprint(2, "alt: %r\n");
 			break;
 		}
-		// FIXME: multitrack mixing
 		for(bp=buf, m=sizeof buf; bp<buf+sizeof buf; bp+=n, m-=n){
-			if((b = getslice(current, m, &n)) == nil || n <= 0){
+			if((b = getslice(&dot, m, &n)) == nil || n <= 0){
 				fprint(2, "aproc: %r\n");
 				nerr++;
 				goto again;
@@ -157,9 +156,6 @@ threadmain(int argc, char **argv)
 		case 1:
 			if(eqpt(mo.xy, ZP))
 				mo = mc->Mouse;
-			// FIXME: multitrack drawing first
-			//if(mc->buttons != 0)
-			//	setcurrent(mc->xy);
 			switch(mc->buttons){
 			case 1: setjump(view2ss(mc->xy.x - screen->r.min.x)); break;
 			case 2: setloop(view2ss(mc->xy.x - screen->r.min.x)); break;
@@ -176,10 +172,10 @@ threadmain(int argc, char **argv)
 			case 'D': debugdraw ^= 1; refresh(Drawrender); break;
 			case 'S': stereo ^= 1; refresh(Drawall); break;
 			case ' ': toggleplay(); break;
-			case 'b': setjump(current->from); break;
-			case Kesc: setrange(0, current->totalsz); break;
-			case '\n': zoominto(current->from, current->to); break;
-			case 'z': zoominto(0, current->totalsz); break;
+			case 'b': setjump(dot.from); break;
+			case Kesc: setrange(0, dot.totalsz); break;
+			case '\n': zoominto(dot.from, dot.to); break;
+			case 'z': zoominto(0, dot.totalsz); break;
 			case '-': setzoom(-1, 0); break;
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;

@@ -5,7 +5,6 @@
 #include "fns.h"
 
 Dot dot;
-Dot *current;
 
 static int epfd[2];
 
@@ -15,7 +14,7 @@ setright(char *s)
 	vlong off, m;
 
 	off = atoll(s) * Sampsz;
-	if(current->cur > off){
+	if(dot.cur > off){
 		m = Rate * Sampsz;
 		setjump(off - m >= 0 ? off - m : 0);
 	}
@@ -28,7 +27,7 @@ setleft(char *s)
 	vlong off;
 
 	off = atoll(s) * Sampsz;
-	if(current->cur < off)
+	if(dot.cur < off)
 		setjump(off + Sampsz);
 	return setloop(off);
 }
@@ -45,7 +44,7 @@ paste(char *)
 	int r;
 
 	qlock(&lsync);
-	r = cpaste(current) == 0 ? 1 : -1;
+	r = cpaste(&dot) == 0 ? 1 : -1;
 	qunlock(&lsync);
 	return r;
 }
@@ -53,20 +52,20 @@ paste(char *)
 static int
 copy(char *)
 {
-	ccopy(current);
+	ccopy(&dot);
 	return 0;
 }
 
 static vlong
 cut(char *)
 {
-	dprint(nil, "cmd/cut %Δ\n", current);
-	if(current->from == 0 && current->to == current->totalsz){
+	dprint(nil, "cmd/cut %Δ\n", &dot);
+	if(dot.from == 0 && dot.to == dot.totalsz){
 		werrstr("cut: can't cut entire buffer");
 		return -1;
 	}
 	qlock(&lsync);
-	ccut(current);
+	ccut(&dot);
 	qunlock(&lsync);
 	return 1;
 }
@@ -74,9 +73,9 @@ cut(char *)
 static int
 crop(char *)
 {
-	dprint(nil, "cmd/crop %Δ\n", current);
+	dprint(nil, "cmd/crop %Δ\n", &dot);
 	qlock(&lsync);
-	ccrop(current);
+	ccrop(&dot);
 	qunlock(&lsync);
 	return 1;
 }
@@ -89,7 +88,7 @@ writebuf(int fd)
 	usize n, m, k;
 	Dot d;
 
-	d = *current;
+	d = dot;
 	d.cur = d.from;
 	if((nio = iounit(fd)) == 0)
 		nio = 8192;
@@ -138,7 +137,7 @@ rproc(void *efd)
 	Dot d, cd;
 	Chunk *c;
 
-	d = *current;
+	d = dot;
 	if(d.from != 0 && d.to != d.totalsz)
 		d.off = -1;
 	fd = (intptr)efd;
@@ -149,7 +148,7 @@ rproc(void *efd)
 	close(fd);
 	qlock(&lsync);
 	chold(c, &d);
-	*current = d;
+	dot = d;
 	qunlock(&lsync);
 	if(paste(nil) < 0)
 		fprint(2, "paste: %r\n");
@@ -256,7 +255,7 @@ cmd(char *s)
 			break;
 		s += n;
 	}
-	dprint(current->norris, "current dot=%Δ\n", current);
+	dprint(dot.norris, "current dot=%Δ\n", &dot);
 	switch(r){
 	case '<': x = pipefrom(s); break;
 	case '^': x = pipethrough(s); break;
@@ -277,7 +276,7 @@ cmd(char *s)
 	case 'x': x = crop(s); break;
 	default: werrstr("unknown command %C", r); x = -1; break;
 	}
-	dprint(current->norris, "final dot=%Δ\n", current);
+	dprint(dot.norris, "final dot=%Δ\n", &dot);
 	return x;
 }
 
@@ -320,5 +319,4 @@ addtrack(char *path)
 	if(loadfile(fd, &dot) == nil)
 		sysfatal("initcmd: %r");
 	close(fd);
-	current = &dot;
 }
