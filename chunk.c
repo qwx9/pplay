@@ -548,4 +548,5 @@ appendfile(char *path)
 	}
 	linkchunk(dot.norris->left, c);
 	dot.totalsz += d.totalsz;
+	dot.to = dot.totalsz;
 }
