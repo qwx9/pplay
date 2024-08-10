@@ -222,7 +222,6 @@ newdot(Dot *dp)
 	d.cur = d.from = dp->from < d.totalsz ? dp->from : 0;
 	d.to = d.totalsz;
 	d.off = -1;
-	d.trk = dp->trk;
 	return d;
 }
 
@@ -529,4 +528,24 @@ loadfile(int fd, Dot *d)
 	d->from = 0;
 	*d = newdot(d);
 	return c;
+}
+
+void
+appendfile(char *path)
+{
+	int fd;
+	Chunk *c;
+	Dot d;
+
+	if((fd = path != nil ? open(path, OREAD) : 0) < 0)
+		sysfatal("open: %r");
+	if((c = loadfile(fd, &d)) == nil)
+		sysfatal("initcmd: %r");
+	close(fd);
+	if(dot.totalsz == 0){
+		dot = d;
+		return;
+	}
+	linkchunk(dot.norris->left, c);
+	dot.totalsz += d.totalsz;
 }

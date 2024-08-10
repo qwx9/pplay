@@ -121,9 +121,9 @@ threadmain(int argc, char **argv)
 	fmtinstall(L'τ', τfmt);
 	if(*argv != nil)
 		while(*argv != nil)
-			addtrack(*argv++);
+			appendfile(*argv++);
 	else
-		addtrack(nil);
+		appendfile(nil);
 	initdrw(notriob);
 	if((kc = initkeyboard(nil)) == nil)
 		sysfatal("initkeyboard: %r");

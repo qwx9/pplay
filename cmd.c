@@ -308,15 +308,3 @@ catch(void *, char *msg)
 		noted(NCONT);
 	noted(NDFLT);
 }
-
-void
-addtrack(char *path)
-{
-	int fd;
-
-	if((fd = path != nil ? open(path, OREAD) : 0) < 0)
-		sysfatal("open: %r");
-	if(loadfile(fd, &dot) == nil)
-		sysfatal("initcmd: %r");
-	close(fd);
-}

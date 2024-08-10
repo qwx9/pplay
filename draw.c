@@ -233,7 +233,6 @@ drawproc(void*)
 		drawstat();
 		flushimage(display, 1);
 		unlockdisplay(display);
-		//sleep(100);
 		t = nsec() / 1000000.0;
 		Δt = t0 - t;
 		if(Δt > 0)

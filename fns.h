@@ -9,7 +9,7 @@ void	ccut(Dot*);
 void	ccrop(Dot*);
 Chunk*	loadfile(int, Dot*);
 int	cmd(char*);
-void	addtrack(char*);
+void	appendfile(char*);
 void	refresh(int);
 void	setzoom(int, int);
 int	zoominto(vlong, vlong);

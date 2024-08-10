@@ -21,7 +21,6 @@ struct Chunk{
 	Chunk *right;
 };
 struct Dot{
-	ssize trk;
 	usize from;
 	usize to;
 	usize cur;
