@@ -80,23 +80,23 @@ via commands (see below).
 Key commands:
 .TF "Esc"
 .TP
-.B q
-Quit
-.TP
-.B D
-Toggle cut markers
+.B ␣
+Toggle play/pause
 .TP
 .B S
 Toggle stereo channel display (default: left only)
 .TP
-.B ␣
-Toggle play/pause
+.B Tab
+Toggle visible mono or top channel
 .TP
-.B b
-Jump to loop start
+.B D
+Toggle drawing cut markers
 .TP
 .B Esc
 Reset selection
+.TP
+.B b
+Jump to loop start
 .TP
 .B =
 Zoom in
@@ -121,6 +121,9 @@ Pan left by screenful
 .TP
 .B →
 Pan right by screenful
+.TP
+.B q
+Quit
 .PD
 .PP
 Any other key opens up a command prompt (see Commands section below).
@@ -259,3 +262,6 @@ The front may fall off if attempting to load data
 which cannot entirely fit in available memory.
 The maximum size of a single buffer is bound by the limits of
 .IR malloc (2).
+.PP
+Undo/redo don't restore the previous selection correctly,
+and most editing operations don't do set the new selection well enough.
