@@ -168,6 +168,9 @@ Pipe selection to a shell command
 Replace selection or insert at cursor with the contents of
 .I file
 .TP
+.BI !\  cmd
+Execute shell command without any i/o
+.TP
 .BI w\  file
 Write selection to
 .I file

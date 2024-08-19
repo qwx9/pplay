@@ -195,6 +195,12 @@ pipethrough(char *arg)
 }
 
 static int
+pipeselflessly(char *arg)
+{
+	return pipeline(arg, 0, 0);
+}
+
+static int
 replicate(char *)
 {
 	static char u[256];
@@ -260,6 +266,7 @@ cmd(char *s)
 	case '<': x = pipefrom(s); break;
 	case '^': x = pipethrough(s); break;
 	case '|': x = pipeto(s); break;
+	case '!': x = pipeselflessly(s); break;
 	case 'L': x = setleft(s); break;
 	case 'R': x = setright(s); break;
 	case 'c': x = copy(s); break;
