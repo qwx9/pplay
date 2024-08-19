@@ -38,7 +38,7 @@ enum{
 	Drawall = 1<<2,
 };
 
-extern int stereo;
+extern int stereo, chan;
 extern int debug, paused;
 extern int debugdraw;
 

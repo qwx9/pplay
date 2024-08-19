@@ -9,7 +9,7 @@
 
 extern QLock lsync;
 
-int stereo;
+int stereo, chan;
 int debug, paused, notriob;
 
 static Keyboardctl *kc;
@@ -175,6 +175,7 @@ threadmain(int argc, char **argv)
 			case 'b': setjump(dot.from); break;
 			case Kesc: setrange(0, dot.totalsz); break;
 			case '\n': zoominto(dot.from, dot.to); break;
+			case '\t': chan = chan + 1 & 1; break;
 			case 'z': zoominto(0, dot.totalsz); break;
 			case '-': setzoom(-1, 0); break;
 			case '=': setzoom(1, 0); break;

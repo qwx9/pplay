@@ -141,7 +141,7 @@ rendersamples(void)
 	if(Dx(rr) > slen / 2)
 		rr.max.x = rr.min.x + slen / 2;
 	rx = rr;
-	for(l=graph[0]+2*rx.min.x, e=l+2*Dx(rr); l<e; l+=2, rx.min.x++){
+	for(l=graph[chan]+2*rx.min.x, e=l+2*Dx(rr); l<e; l+=2, rx.min.x++){
 		rx.min.y = rr.min.y + bgscalyl - l[1] / bgscalf;
 		rx.max.x = rx.min.x + sampwidth;
 		rx.max.y = rr.min.y + bgscalyl - l[0] / bgscalf;
@@ -157,7 +157,7 @@ rendersamples 0x410450 [0 0] [1365 187] view [0 0] [1365 375]→ [187 0] [1552 1
 
 	rx = rectaddpt(rr, Pt(Dy(view->r)/2,0));
 	//fprint(2, "→ %R\n", rx);
-	for(r=graph[1]+2*rx.min.x, e=r+2*Dx(rr); r<e; r+=2, rx.min.x++){
+	for(r=graph[chan+1&1]+2*rx.min.x, e=r+2*Dx(rr); r<e; r+=2, rx.min.x++){
 		rx.min.y = rr.min.y + bgscalyr - r[1] / bgscalf;
 		rx.max.x = rx.min.x + sampwidth;
 		rx.max.y = rr.min.y + bgscalyr - r[0] / bgscalf;
@@ -303,22 +303,18 @@ again:
 					lmin = s;
 				else if(s > lmax)
 					lmax = s;
-				if(stereo){
-					s = (s16int)(p[3] << 8 | p[2]);
-					if(s < rmin)
-						rmin = s;
-					else if(s > rmax)
-						rmax = s;
-				}
+				s = (s16int)(p[3] << 8 | p[2]);
+				if(s < rmin)
+					rmin = s;
+				else if(s > rmax)
+					rmax = s;
 			}
 			n -= k;
 		}
 		*l++ = lmin;
 		*l++ = lmax;
-		if(stereo){
-			*r++ = rmin;
-			*r++ = rmax;
-		}
+		*r++ = rmin;
+		*r++ = rmax;
 	}
 	working--;
 	refresh(Drawrender);
