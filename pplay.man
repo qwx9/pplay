@@ -1,6 +1,6 @@
 .TH PPLAY 1
 .SH NAME
-pplay \- visual PCM audio player and editor
+pplay \- PCM audio player and editor
 .SH SYNOPSIS
 .B audio/pplay
 [
@@ -10,22 +10,16 @@ pplay \- visual PCM audio player and editor
 ]
 .SH DESCRIPTION
 .I Pplay
-is a PCM audio player displaying a time-domain graphical plot of the data
-and allowing for some simple editing operations
-or piping to/from external programs.
-It operates on raw PCM audio, the same format used by the audio device (see
-.IR audio (3)).
+is an interactive audio player and editor for PCM files
+(16-bit stereo audio at 44.1 kHz sampling rate, see 
+.IR audio (3)),
+displaying each channel's waveform and the current playback position.
 .PP
-All input is fully loaded into memory,
-either from one or more input files
-.BR pcmfiles ,
-or from standard in if run without arguments.
-It loops through the entire buffer or a selected portion forever,
-writing samples to
-.B /dev/audio
-unless
-.B -c
-is specified.
+Playback loops forever between two positional markers,
+initially the beginning and end of the data
+(see section
+.I Loop points and selection
+below).
 .SS "Command line parameters"
 .TF "-b"
 .TP
@@ -36,6 +30,52 @@ Use inverted colors (dark background)
 Write audio to standard out instead of
 .B /dev/audio
 .PD
+.SS "Graphical interface"
+.I Pplay
+visualizes a window of data by splitting it in chunks of samples
+by pixel column on the x axis and extracting the minimal and maximal values.
+The y axis is the entire range of values from -32768 to 32767, bottom to top.
+If stereo display is enabled, the view is split in two, with the right channel on the bottom.
+Otherwise only the left channel is shown.
+.PP
+Time information is displayed on the bottom left,
+with
+.I T
+the sample period (stereo samples per pixel),
+.I @
+the current playback position,
+.I ↺
+the starting loop point,
+.I -
+the ending loop point, and
+.I ‡
+the cursor (last left click).
+The last 4 timestamps are displayed in
+[hh:mm:ss.tt] format (see
+.IR tmdate (2))
+and the stereo sample's number.
+.PP
+When the selected range is the entire data and only the
+.I @
+timestamp is displayed.
+The
+.I ‡
+timestamp is displayed if a cursor has been set
+see section "Loop points and selection" below).
+.SS "Loop points and selection"
+Playback is constrained to a range defined by two positional markers,
+the start and end loop points, initially the entire data.
+This range also acts as a selection for editing operations.
+No selection can be made outside of this range.
+.PP
+Middle-clicking either left or right of the current playback position cursor
+sets respectively the start or end loop point.
+Left-clicking within the range sets the current playback position.
+The last left click is stored as another positional marker ("cursor")
+for some commands.
+Reseting the loop points selects the entire data again and removes the cursor.
+Loop points may also be set to a specific sample number or timestamp
+via commands (see below).
 .SS "Keyboard and mouse commands"
 Key commands:
 .TF "Esc"
@@ -44,10 +84,10 @@ Key commands:
 Quit
 .TP
 .B D
-Toggle drawing cut/insert positions in the buffer
+Toggle cut markers
 .TP
 .B S
-Toggle stereo display (default left channel only)
+Toggle stereo channel display (default: left only)
 .TP
 .B ␣
 Toggle play/pause
@@ -83,198 +123,116 @@ Pan left by screenful
 Pan right by screenful
 .PD
 .PP
+Any other key opens up a command prompt (see Commands section below).
+.PP
 Mouse buttons:
 .TF "1 "
 .TP
 .B 1
-Set cursor
+Set current playback position
 .TP
 .B 2
-Set left or right dot bound
+Set start or end loop point
 .TP
 .B 3
-Pan view horizontally
+Hold to pan view horizontally
 .PD
-.SS "Dot and cursor position"
-.I Pplay
-loops indefinitely an interval referred to as the
-.IR dot .
-The dot is simply the start (left) and end (right) loop points,
-by default the data's beginning and end.
-The current playback position within it is refered to as the
-.IR cursor .
-The dot is set using the middle mouse button and with respect to the cursor:
-if clicking to its left, the left loop point is set,
-if to the right, the right loop point is set.
-The cursor is set with the left mouse button
-and may never escape the dot.
-The last left mouse click is referred to as the
-.I anchor
-point.
-Dot, cursor and anchor are indicated
-by distinctly colored vertical lines.
-.SS "Display"
-The graphical plot displays on the y axis
-the maximal and minimal signed value
-among all samples packed in each pixel column
-for one audio channel.
+.SS "Editing commands"
+Typing any key that isn't a shortcut opens a command prompt.
+Commands are single characters followed by optional arguments.
 .PP
-The x axis is time in number of samples,
-and is described in a text bar
-on the bottom left (mono)
-or in the middle (stereo) of the graphical view.
-The first value is the
-.IR period ,
-or number of samples per vertical pixel column.
-The next fields are offsets from the beginning of the data
-given in the form 
-.IR [hh:mm:ss.tt]\ (samples) ,
-where the first part is in time format (see
-.IR tmdate (2),
-and the second in number of samples.
-The first field is for the current position.
-If set, either the dot or only the anchor follow it.
-.SS "Editing"
-Commands:
 .TF "L sample"
 .TP
-.BI <\  cmd
-Pipe output of a shell command into dot
-.TP
-.BI ^\  cmd
-Pipe dot to a shell command and read back its output into dot
-.TP
-.BI |\  cmd
-Pipe dot to a shell command
-.TP
-.BI L\  sample
-Set left bound/loop point to
-.I sample
-.TP
-.BI R\  sample
-Set right bound/loop point to
-.I sample
-.TP
-.B U
-Redo an edit and restore dot
-.TP
 .B c
-Set snarf buffer to the contents of the dot
+Copy selection (sets hold buffer)
 .TP
 .B d
-Cut dot, replacing snarf buffer
+Cut selection (sets hold buffer)
+.TP
+.B x
+Crop to selection (exclusive cut; does not set hold buffer)
+.TP
+.B p
+Replace selection or insert at cursor from hold buffer
+.TP
+.BI <\  cmd
+Replace selection with output of shell command
+.TP
+.BI ^\  cmd
+Pipe selection to shell command and replace with its output
+.TP
+.BI |\  cmd
+Pipe selection to a shell command
+.TP
+.BI r\  file
+Replace selection or insert at cursor with the contents of
+.I file
+.TP
+.BI w\  file
+Write selection to
+.I file
+.TP
+.B u
+Undo edit
+.TP
+.B U
+Redo edit
 .TP
 .BI j\  sample
 Jump and set current position to
 .I sample
 .TP
-.B p
-Paste snarf buffer into dot or insert at the cursor
+.BI L\  sample
+Set start loop point to
+.I sample
 .TP
-.BI r\  file
-Read
-.I file
-into dot or at the cursor
+.BI R\  sample
+Set end loop point to
+.I sample
 .TP
 .B s
-Replicate dot by piping it to a new
-.IR pplay (1)
-instance
-.TP
-.B u
-Undo an edit and dot change
-.TP
-.BI w\  file
-Write dot to
-.I file
-.TP
-.B x
-Crop to dot (exclusive cut); does
-.B not
-touch the snarf buffer
+Open selection in a new instance of
+.IR pplay (1).
 .PD
 .PP
-Upon typing a key not part of the set of keyboard shortcuts,
-a text entry appears to enter commands in.
-Commands are single character codes,
-and all following text is used as an arguments list.
+Some of the cut/copy commands set the contents of a "hold" buffer
+which may be later inserted or pasted over the current selection
+any number of times.
 .PP
-Editing is performed upon a range or at a position:
-the dot's range if the left or right bound is set, else at the anchor if it exists, else on the entire data.
+Note that if a cursor (last left click) has been set,
+some commands will use its position alone instead of the entire range.
+Setting a cursor thus allows one to insert data at a position rather than
+paste over an entire range.
 .PP
-Behavior depends on the dot.
-If a left or right bound is set,
-inserts replace the range and deletions delete it.
-Otherwise, if an anchor point exists,
-insertion inserts a buffer at its position
-while deletion is disallowed.
-If nothing is set,
-insertion replaces the entire buffer,
-and deletion is also disallowed.
-.PP
-.BR < ,
-.BR r\  (read),
-and
-.BR p\  (paste)
-insert data from an external command or the copy buffer,
-following the rules above.
-.PP
-The
-.BR u\  (undo)
-command reverts a single indel and restores the dot as it were before,
-and
-.BR U\  (redo)
-similarly replays the last action that was undone.
-Undo is infinite.
-.PP
-Commands
-.BR < ,\  ^\ and\ |
-require a valid
+Shell commands are passed verbatim to
 .IR rc (1)
-expression, passed uninterpreted (quoting is unnecessary).
-In other words, expressions such as:
-.IP
-.EX
-| stretch -r1.2 | norm -f 2 | audio/wavenc > seymourbutz.wav
-.EE
-.PP
-are passed as a single string and then evaluated in a subshell,
-with the dot written to its standard in.
-.I Pplay
-does not handle any subprocess' abnormal exits in any way.
-.PP
-File i/o commands
-.BR r\  and\  w
-prompt for a pathname which is also uninterpreted.
-Consequently, commands and i/o may fail once actually executed;
-in case
+and may be any valid expression including function definitions.
+Each of them runs concurrently in the background
+and updates the then selected range once done.
+Upon exit,
 .I pplay
-was reading from a file or pipe,
-the partial content already loaded will not be discarded.
-External commands launched from within
-.I pplay
-.B are not
-interrupted on exit,
-causing it to appear stuck.
-Multiple commands may run concurrently.
-.SS Memory management
-No data loaded into memory is ever freed unless it can be
-guaranteed to never be used again.
-While refcounting is already being done,
-currently no attempt to keep guarantees is made
-and nothing is ever freed.
-However, memory is never duplicated.
-Therefore, it is dangerous to load large amounts of data,
-but once loaded, memory usage will not grow much.
-The maximum size of a single buffer is bound by the limits of
-.IR malloc (2).
+will wait for subcommands to end and exit first.
+.PP
+Undo is infinite.
 .SH EXAMPLES
 Use
 .IR play (1)
-to decode any known audio format:
+to decode any known audio format and pass it on standard in:
 .IP
 .EX
-; play -o /fd/1 file | audio/pplay
+; play -o /fd/1 files.. | audio/pplay
+.EE
+.PP
+Timestretch selection, normalize volume and save as a WAV file:
+.IP
+.EX
+|stretch -r1.2 | norm -f 2 | audio/wavenc > seymourbutz.wav
+.EE
+.PP
+Apply fadeout to selection:
+.IP
+.EX
+^pcmenv 1 0 1.1
 .EE
 .SH "SEE ALSO"
 .IR audio (1),
@@ -285,18 +243,16 @@ to decode any known audio format:
 .I Pplay
 first spawned on 9front (October, 2017), beyond the environment.
 .SH BUGS
-Undo may irreversibly duplicate buffer contents,
-and there are still some issues with what is used as a dot
-when replacing content.
-Trust, but save often.
-.PP
 An external command that never exits will freeze
 .I pplay
 forever on exit due to the reliance on
 .BR thread (2).
+Subprocess abnormal exits are completely unhandled.
+Edits in a range while a shell command affecting it is running,
+or the case of multiple shell commands on intersecting ranges,
+are not serialized or protected in any way.
 .PP
-Any unintended interruption in playback due to scheduling,
-or slower than instaneous redraws, are considered bugs,
-and drawing ones are still there -- crawling, slithering,
-glistening in the dark, poisoning my dreams and turning
-them into nightmares.
+The front may fall off if attempting to load data
+which cannot entirely fit in available memory.
+The maximum size of a single buffer is bound by the limits of
+.IR malloc (2).
