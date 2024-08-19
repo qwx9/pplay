@@ -35,7 +35,7 @@ extern QLock lsync;
 enum{
 	Drawcur = 1<<0,
 	Drawrender = 1<<1,
-	Drawall = 1<<2,
+	Drawall = (1<<2) - 1,
 };
 
 extern int stereo, chan;

@@ -170,7 +170,7 @@ threadmain(int argc, char **argv)
 			case Kdel:
 			case 'q': threadexitsall(nil);
 			case 'D': debugdraw ^= 1; refresh(Drawrender); break;
-			case 'S': stereo ^= 1; refresh(Drawall); break;
+			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
 			case 'b': setjump(dot.from); break;
 			case Kesc: setrange(0, dot.totalsz); break;

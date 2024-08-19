@@ -155,8 +155,7 @@ FIXME: wrong midpoint.
 rendersamples 0x410450 [0 0] [1365 187] view [0 0] [1365 375]→ [187 0] [1552 187]
 */
 
-	rx = rectaddpt(rr, Pt(Dy(view->r)/2,0));
-	//fprint(2, "→ %R\n", rx);
+	rx = rectaddpt(rr, Pt(0, Dy(view->r)/2));
 	for(r=graph[chan+1&1]+2*rx.min.x, e=r+2*Dx(rr); r<e; r+=2, rx.min.x++){
 		rx.min.y = rr.min.y + bgscalyr - r[1] / bgscalf;
 		rx.max.x = rx.min.x + sampwidth;
@@ -221,7 +220,7 @@ drawproc(void*)
 			break;
 		}
 		lockdisplay(display);
-		if(what == Drawrender || stalerender || working){
+		if((what & Drawrender) != 0 || stalerender || working){
 			if(!working)
 				stalerender = 0;
 			render();
