@@ -192,7 +192,9 @@ drawstat(void)
 	Point p;
 
 	draw(screen, statr, col[Cbg], nil, ZP);
-	seprint(s, s+sizeof s, "T=%zd @ %τ", T / Sampsz, dot.cur);
+	seprint(s, s+sizeof s, "%sT=%zd @ %τ",
+		stereo ? "" : chan==0?"Left ":"Right ",
+		T / Sampsz, dot.cur);
 	p = string(screen, statr.min, col[Ctext], ZP, font, s);
 	if(dot.from > 0 || dot.to < dot.totalsz){
 		seprint(s, s+sizeof s, " from %τ to %τ", dot.from, dot.to);
