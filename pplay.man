@@ -52,8 +52,8 @@ the ending loop point, and
 the cursor (last left click).
 The last 4 timestamps are displayed in
 [hh:mm:ss.tt] format (see
-.IR tmdate (2))
-and the stereo sample's number.
+.IR tmdate (2)),
+or the number of stereo samples so far if toggled.
 .PP
 When the selected range is the entire data and only the
 .I @
@@ -89,8 +89,8 @@ Toggle stereo channel display (default: left only)
 .B Tab
 Toggle visible mono or top channel
 .TP
-.B D
-Toggle drawing cut markers
+.B t
+Toggle time display in samples
 .TP
 .B Esc
 Reset selection
@@ -111,7 +111,7 @@ Fine zoom in
 Fine zoom out
 .TP
 .B ↵
-Zoom into the entire dot
+Zoom into current selection
 .TP
 .B z
 Reset zoom to entire buffer
