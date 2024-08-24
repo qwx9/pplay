@@ -167,20 +167,20 @@ threadmain(int argc, char **argv)
 			break;
 		case 2:
 			switch(r){
-			case Kdel:
-			case 'q': threadexitsall(nil);
-			case 'D': debugdraw ^= 1; refresh(Drawrender); break;
-			case 'S': stereo ^= 1; redraw(1); break;
 			case ' ': toggleplay(); break;
-			case 'b': setjump(dot.from); break;
 			case Kesc: setrange(0, dot.totalsz); break;
 			case '\n': zoominto(dot.from, dot.to); break;
 			case '\t': chan = chan + 1 & 1; break;
-			case 'z': zoominto(0, dot.totalsz); break;
 			case '-': setzoom(-1, 0); break;
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;
 			case '+': setzoom(1, 1); break;
+			case 'S': stereo ^= 1; redraw(1); break;
+			case Kdel:
+			case 'q': threadexitsall(nil);
+			case 'b': setjump(dot.from); break;
+			case 't': samptime ^= 1; break;
+			case 'z': zoominto(0, dot.totalsz); break;
 			case Kleft: setpage(-1); break;
 			case Kright: setpage(1); break;
 			default:

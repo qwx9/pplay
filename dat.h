@@ -21,11 +21,11 @@ struct Chunk{
 	Chunk *right;
 };
 struct Dot{
-	usize from;
-	usize to;
-	usize cur;
+	ssize from;
+	ssize to;
+	ssize cur;
 	ssize off;
-	usize totalsz;
+	ssize totalsz;
 	Chunk *norris;
 };
 extern Dot dot;
@@ -40,7 +40,7 @@ enum{
 
 extern int stereo, chan;
 extern int debug, paused;
-extern int debugdraw;
+extern int samptime;
 
 #define MIN(x,y)	((x) < (y) ? (x) : (y))
 #define MAX(x,y)	((x) > (y) ? (x) : (y))

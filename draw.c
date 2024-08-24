@@ -6,7 +6,7 @@
 #include "fns.h"
 
 QLock lsync;
-int debugdraw = 1;
+int samptime;
 
 enum{
 	Cbg,
@@ -81,8 +81,10 @@ int
 	if(p > dot.totalsz)
 		return fmtstrcpy(fmt, "-∞");
 	b2t(p, &th, &tm, &ts, &tμ);
-	return fmtprint(fmt, "%02d:%02d:%02d.%03d (%zd)",
-		th, tm, ts, tμ, p / Sampsz);
+	if(samptime)
+		return fmtprint(fmt, "%zd", p / Sampsz);
+	else
+		return fmtprint(fmt, "%02d:%02d:%02d.%03d", th, tm, ts, tμ);
 }
 
 static int
@@ -120,8 +122,7 @@ renderchunks(void)
 static void
 rendermarks(void)
 {
-	if(debugdraw)
-		renderchunks();
+	renderchunks();
 	renderpos(dot.from, col[Cloop], 0);
 	renderpos(dot.to, col[Cloop], 0);
 	if(dot.off != dot.from)
@@ -191,14 +192,14 @@ drawstat(void)
 	Point p;
 
 	draw(screen, statr, col[Cbg], nil, ZP);
-	seprint(s, s+sizeof s, "T %zd @ %τ", T / Sampsz, dot.cur);
+	seprint(s, s+sizeof s, "T=%zd @ %τ", T / Sampsz, dot.cur);
 	p = string(screen, statr.min, col[Ctext], ZP, font, s);
 	if(dot.from > 0 || dot.to < dot.totalsz){
-		seprint(s, s+sizeof s, " ↺ %τ - %τ", dot.from, dot.to);
+		seprint(s, s+sizeof s, " from %τ to %τ", dot.from, dot.to);
 		p = string(screen, p, col[Cloop], ZP, font, s);
 	}
-	if(dot.off != dot.from){
-		seprint(s, s+sizeof s, " ‡ %τ", dot.off);
+	if(dot.off != dot.from && dot.off >= 0){
+		seprint(s, s+sizeof s, " last %τ", dot.off);
 		p = string(screen, p, col[Cins], ZP, font, s);
 	}
 	statr.max.x = p.x;

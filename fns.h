@@ -38,4 +38,4 @@ int	setpri(int);
 #pragma	varargck	argpos	dprint	2
 #pragma	varargck	type	"χ"	Chunk*
 #pragma	varargck	type	"Δ"	Dot*
-#pragma	varargck	type	"τ"	usize
+#pragma	varargck	type	"τ"	ssize
