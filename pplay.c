@@ -106,7 +106,7 @@ void
 threadmain(int argc, char **argv)
 {
 	char *p;
-	Mouse mo;
+	Mouse m, mo;
 	Rune r;
 
 	notriob = 0;
@@ -146,24 +146,26 @@ threadmain(int argc, char **argv)
 	for(;;){
 		switch(alt(a)){
 		case 0:
+			mo = mc->Mouse;
 			lockdisplay(display);
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
 			unlockdisplay(display);
 			redraw(1);
-			mo = mc->Mouse;
 			break;
 		case 1:
-			if(eqpt(mo.xy, ZP))
-				mo = mc->Mouse;
+			m = mc->Mouse;
+			if(mo.msec == 0)
+				mo = m;
 			switch(mc->buttons){
-			case 1: setjump(view2ss(mc->xy.x - screen->r.min.x)); break;
-			case 2: setloop(view2ss(mc->xy.x - screen->r.min.x)); break;
-			case 4: setpan(mo.xy.x - mc->xy.x); break;
-			case 8: setzoom(1, 1); break;
-			case 16: setzoom(-1, 1); break;
+			case 1: setjump(view2ss(m.xy.x - screen->r.min.x)); break;
+			case 2: setloop(view2ss(m.xy.x - screen->r.min.x)); break;
+			case 4: setpan(mo.xy.x - m.xy.x); break;
+			case 5: setzoom(m.xy.y - mo.xy.y, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
+			case 8: setzoom(1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
+			case 16: setzoom(-1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
 			}
-			mo = mc->Mouse;
+			mo = m;
 			break;
 		case 2:
 			switch(r){
@@ -171,10 +173,10 @@ threadmain(int argc, char **argv)
 			case Kesc: setrange(0, dot.totalsz); break;
 			case '\n': zoominto(dot.from, dot.to); break;
 			case '\t': chan = chan + 1 & 1; break;
-			case '-': setzoom(-1, 0); break;
-			case '=': setzoom(1, 0); break;
-			case '_': setzoom(-1, 1); break;
-			case '+': setzoom(1, 1); break;
+			case '-': setzoom(-20.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
+			case '=': setzoom(20.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
+			case '_': setzoom(-1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
+			case '+': setzoom(1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
 			case '1': bound = 0; break;
 			case '2': bound = 1; break;
 			case 'S': stereo ^= 1; redraw(1); break;

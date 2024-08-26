@@ -342,11 +342,10 @@ resetdraw(void)
 	bgscalf = 32767. / bgscalyl;
 }
 
-void
-redraw(int all)
+static void
+resetview(int all)
 {
 	usize span;
-	Dot d;
 
 	lockdisplay(display);
 	T = (vlong)(dot.totalsz / zoom / Dx(screen->r)) & ~3;
@@ -360,6 +359,14 @@ redraw(int all)
 	if(all)
 		resetdraw();
 	unlockdisplay(display);
+}
+
+void
+redraw(int all)
+{
+	Dot d;
+
+	resetview(all);
 	if(paused)
 		refresh(Drawall);
 	d = dot;
@@ -369,20 +376,28 @@ redraw(int all)
 }
 
 void
-setzoom(int Δz, int mul)
+setzoom(int Δz, int x)
 {
-	double z;
+	double z, span, Δx;
 
-	if(!mul)
-		z = zoom + Δz;
-	else if(Δz < 0)
-		z = zoom / pow(2, -Δz);
+	if(Δz < 0)
+		z = zoom / pow(1.025, -Δz);
 	else
-		z = zoom * pow(2, Δz);
-	if(z < 1.0 || z > (dot.totalsz / Sampsz) / Dx(screen->r))
+		z = zoom * pow(1.025, Δz);
+	if(z < 1.0)
+		z = 1.0;
+	else if(z > (dot.totalsz / Sampsz) / Dx(screen->r))
+		z = (dot.totalsz / Sampsz) / Dx(screen->r);
+	if(z == zoom)
 		return;
 	zoom = z;
-	redraw(0);
+	span = T;
+	resetview(0);
+	span -= T;
+	span *= Dx(screen->r);
+	Δx = ((double)x / Dx(screen->r)) * span / T;
+	if(!setpan(Δx))
+		redraw(0);
 }
 
 int
@@ -405,14 +420,14 @@ zoominto(vlong from, vlong to)
 	return 0;
 }
 
-void
+int
 setpan(int Δx)
 {
 	usize new;
 
 	Δx *= T;
-	if(zoom == 1)
-		return;
+	if(zoom == 1.0)
+		return 0;
 	if(Δx < 0 && -Δx > views)
 		new = 0;
 	else if(views + Δx >= viewmax)
@@ -420,9 +435,10 @@ setpan(int Δx)
 	else
 		new = views + Δx;
 	if(new == views)
-		return;
+		return 0;
 	views = new;
 	redraw(0);
+	return 1;
 }
 
 void

@@ -49,13 +49,11 @@ Timestamps are displayed in
 .IR tmdate (2)),
 or the number of stereo samples so far if toggled.
 .PP
-When the selected range is the entire data and only the
-.I @
-timestamp is displayed.
-The
-.I ‡
-timestamp is displayed if a cursor has been set
-see section "Loop points and selection" below).
+The view can be moved horizontally with the cursor keys,
+or by holding the right mouse button.
+Zooming in decreases the sample period (and vice-versa)
+via keyboard shortcuts, the mouse scroll buttons,
+or by holding the left mouse button while panning.
 .SS "Loop points and selection"
 Playback is constrained to a range defined by two positional markers,
 the start and end loop points, initially the entire data.
