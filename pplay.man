@@ -42,15 +42,9 @@ Time information is displayed on the bottom left,
 with
 .I T
 the sample period (stereo samples per pixel),
-.I @
-the current playback position,
-.I ↺
-the starting loop point,
-.I -
-the ending loop point, and
-.I ‡
-the cursor (last left click).
-The last 4 timestamps are displayed in
+then the current playback position,
+and, if set, the start and end loop points and cursor (last left click).
+Timestamps are displayed in
 [hh:mm:ss.tt] format (see
 .IR tmdate (2)),
 or the number of stereo samples so far if toggled.
@@ -68,9 +62,19 @@ the start and end loop points, initially the entire data.
 This range also acts as a selection for editing operations.
 No selection can be made outside of this range.
 .PP
-Middle-clicking either left or right of the current playback position cursor
-sets respectively the start or end loop point.
-Left-clicking within the range sets the current playback position.
+The start and end loop points are both set with the middle mouse button.
+Only one of them can be set at a time, by default the start loop point.
+The
+.I 1
+and
+.I 2
+keyboard keys are used to switch between the two.
+Setting the start loop point after or the end loop point
+before the current playback position
+will reset playback at the start loop point.
+Swapping start and end loop points is disallowed.
+.PP
+Left-clicking within the selected range sets the current playback position.
 The last left click is stored as another positional marker ("cursor")
 for some commands.
 Reseting the loop points selects the entire data again and removes the cursor.
@@ -94,6 +98,12 @@ Toggle time display in samples
 .TP
 .B Esc
 Reset selection
+.TP
+.B 1
+Toggle setting start loop point
+.TP
+.B 2
+Toggle setting end loop point
 .TP
 .B b
 Jump to loop start
@@ -263,5 +273,5 @@ which cannot entirely fit in available memory.
 The maximum size of a single buffer is bound by the limits of
 .IR malloc (2).
 .PP
-Undo/redo don't restore the previous selection correctly,
-and most editing operations don't do set the new selection well enough.
+Undo/redo and most editing operations do not reset the selected
+range in a natural enough way.
