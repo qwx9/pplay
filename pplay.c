@@ -175,6 +175,8 @@ threadmain(int argc, char **argv)
 			case '=': setzoom(1, 0); break;
 			case '_': setzoom(-1, 1); break;
 			case '+': setzoom(1, 1); break;
+			case '1': bound = 0; break;
+			case '2': bound = 1; break;
 			case 'S': stereo ^= 1; redraw(1); break;
 			case Kdel:
 			case 'q': threadexitsall(nil);

@@ -29,6 +29,7 @@ struct Dot{
 	Chunk *norris;
 };
 extern Dot dot;
+extern int bound;
 
 extern QLock lsync;
 

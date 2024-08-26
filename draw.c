@@ -436,8 +436,11 @@ setrange(usize from, usize to)
 {
 	from &= ~3;
 	to &= ~3;
+	if(from >= to)
+		return;
 	dot.from = from;
 	dot.to = to;
+	/* advance may desync and reset it again */
 	if(dot.cur < from || dot.cur >= to)
 		dot.cur = from;
 	dot.off = -1;
@@ -467,7 +470,7 @@ setloop(vlong off)
 		werrstr("invalid range");
 		return -1;
 	}
-	if(off < dot.cur)
+	if(bound == 0)
 		setrange(off, dot.to);
 	else
 		setrange(dot.from, off);

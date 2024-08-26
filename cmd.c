@@ -5,6 +5,7 @@
 #include "fns.h"
 
 Dot dot;
+int bound;
 
 static int epfd[2];
 
@@ -292,7 +293,8 @@ advanceone(Dot *d, usize n)
 {
 	usize m;
 
-	assert(d->cur >= d->from && d->cur <= d->to);
+	if(d->cur < d->from || d->cur >= d->to)
+		d->cur = d->from;
 	while(n > 0){
 		m = d->to - d->cur > n ? n : d->to - d->cur;
 		n -= m;
