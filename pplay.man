@@ -130,6 +130,12 @@ Pan left by screenful
 .B →
 Pan right by screenful
 .TP
+.B D
+Kill spawned reader process if it exists
+.TP
+.B Del
+Kill any spawned external processes
+.TP
 .B q
 Quit
 .PD
@@ -221,11 +227,23 @@ paste over an entire range.
 Shell commands are passed verbatim to
 .IR rc (1)
 and may be any valid expression including function definitions.
-Each of them runs concurrently in the background
-and updates the then selected range once done.
-Upon exit,
-.I pplay
-will wait for subcommands to end and exit first.
+Commands which spawn a process which will write data back
+.RB ( < ,
+.BR ^ ,
+.BR r )
+disable all commands which may also modify the data
+until the process exits.
+.I rc
+commands which do not exit on their own,
+for instance when reading from a pipe,
+can be interrupted with the
+.B D
+shortcut.
+Commands which do not read in data
+.RB ( | ,
+.BR ! ,
+.BR w )
+will be left alone on exit, allowing them to finish.
 .PP
 Undo is infinite.
 .SH EXAMPLES
@@ -248,6 +266,15 @@ Apply fadeout to selection:
 .EX
 ^pcmenv 1 0 1.1
 .EE
+.PP
+Record arbitrary amount of data from a pipe:
+.IP
+.EX
+</dev/audio
+.EE
+Use the
+.B D
+shortcut to interrupt the reader process and paste the data read so far.
 .SH "SEE ALSO"
 .IR audio (1),
 .IR play (1),
@@ -257,15 +284,6 @@ Apply fadeout to selection:
 .I Pplay
 first spawned on 9front (October, 2017), beyond the environment.
 .SH BUGS
-An external command that never exits will freeze
-.I pplay
-forever on exit due to the reliance on
-.BR thread (2).
-Subprocess abnormal exits are completely unhandled.
-Edits in a range while a shell command affecting it is running,
-or the case of multiple shell commands on intersecting ranges,
-are not serialized or protected in any way.
-.PP
 The front may fall off if attempting to load data
 which cannot entirely fit in available memory.
 The maximum size of a single buffer is bound by the limits of

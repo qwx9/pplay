@@ -1,5 +1,6 @@
 void	dprint(Chunk*, char*, ...);
 void	freechain(Chunk*);
+void	killreader(void);
 int	unpop(char*);
 int	popop(char*);
 int	cpaste(Dot*);

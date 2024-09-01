@@ -4,6 +4,8 @@
 #include "dat.h"
 #include "fns.h"
 
+extern Channel *pidc;
+
 Dot dot;
 int bound;
 
@@ -57,7 +59,7 @@ copy(char *)
 	return 0;
 }
 
-static vlong
+static int
 cut(char *)
 {
 	dprint(nil, "cmd/cut %Δ\n", &dot);
@@ -115,7 +117,7 @@ rc(void *s)
 	dup(epfd[0], 0);
 	dup(epfd[0], 1);
 	close(epfd[0]);
-	procexecl(nil, "/bin/rc", "rc", "-c", s, nil);
+	procexecl(pidc, "/bin/rc", "rc", "-c", s, nil);
 	sysfatal("procexec: %r");
 }
 
@@ -124,7 +126,6 @@ wproc(void *efd)
 {
 	int fd;
 
-	threadsetgrp(1);
 	fd = (intptr)efd;
 	writebuf(fd);
 	close(fd);
@@ -160,6 +161,12 @@ rproc(void *efd)
 static int
 pipeline(char *arg, int rr, int wr)
 {
+	if(nslots == 0){
+		fprint(2, "pipeline: too many backgrounded processes\n");
+		return -1;
+	}
+	if(rr)
+		reader = 0;
 	if(pipe(epfd) < 0)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
@@ -247,9 +254,9 @@ int
 cmd(char *s)
 {
 	int n, x;
+	int (*fn)(char*);
 	Rune r, r´;
 
-	/* FIXME: avoid potential conflicts with keys in main() */
 	assert(s != nil);
 	s += chartorune(&r, s);
 	for(;;){
@@ -263,28 +270,53 @@ cmd(char *s)
 		s += n;
 	}
 	dprint(dot.norris, "current dot=%Δ\n", &dot);
-	switch(r){
-	case '<': x = pipefrom(s); break;
-	case '^': x = pipethrough(s); break;
-	case '|': x = pipeto(s); break;
-	case '!': x = pipeselflessly(s); break;
-	case 'L': x = setleft(s); break;
-	case 'R': x = setright(s); break;
-	case 'c': x = copy(s); break;
-	case 'd': x = cut(s); break;
-	case 'j': x = jumpto(s); break;
-	//case 'm': x = mark(s); break;
-	case 'p': x = paste(s); break;
-	case 'q': threadexitsall(nil);
-	case 'r': x = readfrom(s); break;
-	case 's': x = replicate(s); break;
-	case 'U': x = unpop(s); break;
-	case 'u': x = popop(s); break;
-	case 'w': x = writeto(s); break;
-	case 'x': x = crop(s); break;
-	default: werrstr("unknown command %C", r); x = -1; break;
+	if(reader >= 0){
+		switch(r){
+		case '<':
+		case '^':
+		case 'c':
+		case 'd':
+		//case 'm':
+		case 'p':
+		case 'r':
+		case 'U':
+		case 'u':
+		case 'w':
+		case 'x':
+			werrstr("still reading from external process\n");
+			return -1;
+		}
 	}
-	dprint(dot.norris, "final dot=%Δ\n", &dot);
+	x = 666;
+	fn = nil;
+	switch(r){
+	case 'q': threadexitsall(nil);
+	case 'D': killreader(); break;
+	case '<': fn = pipefrom; break;
+	case '^': fn = pipethrough; break;
+	case '|': fn = pipeto; break;
+	case '!': fn = pipeselflessly; break;
+	case 'L': fn = setleft; break;
+	case 'R': fn = setright; break;
+	case 'c': fn = copy; break;
+	case 'd': fn = cut; break;
+	case 'j': fn = jumpto; break;
+	//case 'm': fn = mark; break;
+	case 'p': fn = paste; break;
+	case 'r': fn = readfrom; break;
+	case 's': fn = replicate; break;
+	case 'U': fn = unpop; break;
+	case 'u': fn = popop; break;
+	case 'w': fn = writeto; break;
+	case 'x': fn = crop; break;
+	default:
+		werrstr("unknown command %C", r);
+		return -1;
+	}
+	if(fn != nil){
+		x = fn(s);
+		dprint(dot.norris, "final dot=%Δ\n", &dot);
+	}
 	return x;
 }
 
@@ -308,12 +340,4 @@ void
 advance(usize n)
 {
 	advanceone(&dot, n);
-}
-
-static void
-catch(void *, char *msg)
-{
-	if(strstr(msg, "closed pipe"))
-		noted(NCONT);
-	noted(NDFLT);
 }

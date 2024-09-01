@@ -42,6 +42,8 @@ enum{
 extern int stereo, chan;
 extern int debug, paused;
 extern int samptime;
+extern int nslots;
+extern int reader;
 
 #define MIN(x,y)	((x) < (y) ? (x) : (y))
 #define MAX(x,y)	((x) > (y) ? (x) : (y))

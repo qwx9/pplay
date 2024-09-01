@@ -11,11 +11,33 @@ extern QLock lsync;
 
 int stereo, chan;
 int debug, paused, notriob;
+int reader = -1;
+Channel *pidc;
 
 static Keyboardctl *kc;
 static Mousectl *mc;
 static int cat;
 static Channel *crm114;
+static int pids[32];
+int nslots = nelem(pids);
+
+void
+killreader(void)
+{
+	if(reader <= 0)
+		return;
+	postnote(PNGROUP, reader, "kill");
+}
+
+static void
+killemall(void)
+{
+	int i, pid;
+
+	for(i=0; i<nelem(pids); i++)
+		if((pid = pids[i]) >= 0)
+			postnote(PNGROUP, pid, "kill");
+}
 
 static void
 aproc(void *)
@@ -105,8 +127,11 @@ usage(void)
 void
 threadmain(int argc, char **argv)
 {
+	int i, pid;
 	char *p;
 	Mouse m, mo;
+	Channel *waitc;
+	Waitmsg *w;
 	Rune r;
 
 	notriob = 0;
@@ -130,22 +155,35 @@ threadmain(int argc, char **argv)
 	if((mc = initmouse(nil, screen)) == nil)
 		sysfatal("initmouse: %r");
 	mo.xy = ZP;
-	Alt a[] = {
-		{mc->resizec, nil, CHANRCV},
-		{mc->c, &mc->Mouse, CHANRCV},
-		{kc->c, &r, CHANRCV},
-		{nil, nil, CHANEND}
-	};
+	for(i=0; i<nelem(pids); i++)
+		pids[i] = -1;
 	if(setpri(13) < 0)
 		fprint(2, "setpri: %r\n");
-	if((crm114 = chancreate(sizeof(ulong), 2)) == nil)
+	if((crm114 = chancreate(sizeof(ulong), 2)) == nil
+	|| (pidc = chancreate(sizeof(int), 1)) == nil)
 		sysfatal("chancreate: %r");
 	if(proccreate(aproc, nil, 16*1024) < 0)
 		sysfatal("threadcreate: %r");
 	toggleplay();
+	waitc = threadwaitchan();
+	enum{
+		Aresize,
+		Amouse,
+		Akey,
+		Apid,
+		Await,
+	};
+	Alt a[] = {
+		[Aresize] {mc->resizec, nil, CHANRCV},
+		[Amouse] {mc->c, &mc->Mouse, CHANRCV},
+		[Akey] {kc->c, &r, CHANRCV},
+		[Apid] {pidc, &pid, CHANRCV},
+		[Await] {waitc, &w, CHANRCV},
+		{nil, nil, CHANEND}
+	};
 	for(;;){
 		switch(alt(a)){
-		case 0:
+		case Aresize:
 			mo = mc->Mouse;
 			lockdisplay(display);
 			if(getwindow(display, Refnone) < 0)
@@ -153,7 +191,7 @@ threadmain(int argc, char **argv)
 			unlockdisplay(display);
 			redraw(1);
 			break;
-		case 1:
+		case Amouse:
 			m = mc->Mouse;
 			if(mo.msec == 0)
 				mo = m;
@@ -167,7 +205,7 @@ threadmain(int argc, char **argv)
 			}
 			mo = m;
 			break;
-		case 2:
+		case Akey:
 			switch(r){
 			case ' ': toggleplay(); break;
 			case Kesc: setrange(0, dot.totalsz); break;
@@ -180,13 +218,14 @@ threadmain(int argc, char **argv)
 			case '1': bound = 0; break;
 			case '2': bound = 1; break;
 			case 'S': stereo ^= 1; redraw(1); break;
-			case Kdel:
-			case 'q': threadexitsall(nil);
 			case 'b': setjump(dot.from); break;
 			case 't': samptime ^= 1; break;
 			case 'z': zoominto(0, dot.totalsz); break;
 			case Kleft: setpage(-1); break;
 			case Kright: setpage(1); break;
+			case 'D': killreader(); break;
+			case Kdel: killemall(); break;
+			case 'q': threadexitsall(nil);
 			default:
 				if((p = prompt(r)) == nil || strlen(p) == 0){
 					refresh(Drawrender);
@@ -197,8 +236,38 @@ threadmain(int argc, char **argv)
 				case 0: refresh(Drawall); break;
 				case 1: redraw(0); break;
 				case 2: redraw(1); break;
+				default: break;
 				}
 			}
+			break;
+		case Apid:
+			if(pid < 0){
+				fprint(2, "process exited with error\n");
+				break;
+			}
+			for(i=0; i<nelem(pids); i++)
+				if(pids[i] < 0){
+					pids[i] = pid;
+					break;
+				}
+			assert(i < nelem(pids));
+			if(reader == 0)
+				reader = pid;
+			nslots--;
+			break;
+		case Await:
+			for(i=0; i<nelem(pids); i++)
+				if(pids[i] == w->pid){
+					pids[i] = -1;
+					break;
+				}
+			if(i == nelem(pids))
+				fprint(2, "phase error -- no such pid %d\n", w->pid);
+			if(w->pid == reader)
+				reader = -1;
+			nslots++;
+			free(w);
+			break;
 		}
 	}
 }
