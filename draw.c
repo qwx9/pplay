@@ -510,7 +510,7 @@ initdrw(int fuckit)
 		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, DRed);
 	}else{
 		col[Cbg] = display->black;
-		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x2A2A2AFF);
+		col[Csamp] = eallocimage(Rect(0,0,1,1), 1, 0x777777FF);
 		col[Ctext] = eallocimage(Rect(0,0,1,1), 1, 0xBBBBBBFF);
 		col[Cline] = eallocimage(Rect(0,0,1,1), 1, 0xEEA000FF);
 		col[Cins] = eallocimage(Rect(0,0,1,1), 1, 0x509A9AFF);
