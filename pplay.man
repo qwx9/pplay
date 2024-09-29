@@ -61,7 +61,7 @@ This range also acts as a selection for editing operations.
 No selection can be made outside of this range.
 .PP
 The start and end loop points are both set with the middle mouse button.
-Only one of them can be set at a time, by default the start loop point.
+Only one of them can be set at a time, by default the end loop point.
 The
 .I 1
 and
