@@ -106,15 +106,17 @@ toggleplay(void)
 static char *
 prompt(Rune r)
 {
+	int n;
 	Rune q;
 	static char buf[512];
 
 	chartorune(&q, buf);
 	if(q != r)
-          snprint(buf, sizeof buf, "%C", r);
-	if(enter("cmd:", buf, sizeof(buf)-UTFmax, mc, kc, _screen) < 0)
-		return nil;
-	return buf;
+		snprint(buf, sizeof buf, "%C", r);
+	lockdisplay(display);
+	n = enter("cmd:", buf, sizeof(buf)-UTFmax, mc, kc, nil);
+	unlockdisplay(display);
+	return n < 0 ? nil : buf;
 }
 
 static void
