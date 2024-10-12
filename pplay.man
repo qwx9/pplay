@@ -43,11 +43,12 @@ with
 .I T
 the sample period (stereo samples per pixel),
 then the current playback position,
-and, if set, the start and end loop points and cursor (last left click).
+the start and end loop points, and cursor (last left click) if set.
 Timestamps are displayed in
 [hh:mm:ss.tt] format (see
 .IR tmdate (2)),
 or the number of stereo samples so far if toggled.
+The loop point currently armed is shown inside brackets.
 .PP
 The view can be moved horizontally with the cursor keys,
 or by holding the right mouse button.

@@ -217,8 +217,8 @@ threadmain(int argc, char **argv)
 			case '=': setzoom(20.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
 			case '_': setzoom(-1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
 			case '+': setzoom(1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
-			case '1': bound = 0; break;
-			case '2': bound = 1; break;
+			case '1': bound = Bstart; break;
+			case '2': bound = Bend; break;
 			case 'S': stereo ^= 1; redraw(1); break;
 			case 'b': setjump(dot.from); break;
 			case 't': samptime ^= 1; break;

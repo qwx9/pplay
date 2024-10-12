@@ -150,12 +150,6 @@ rendersamples(void)
 	}
 	if(!stereo)
 		return;
-
-/*
-FIXME: wrong midpoint.
-rendersamples 0x410450 [0 0] [1365 187] view [0 0] [1365 375]→ [187 0] [1552 187]
-*/
-
 	rx = rectaddpt(rr, Pt(0, Dy(view->r)/2));
 	for(r=graph[chan+1&1]+2*rx.min.x, e=r+2*Dx(rr); r<e; r+=2, rx.min.x++){
 		rx.min.y = rr.min.y + bgscalyr - r[1] / bgscalf;
@@ -188,7 +182,7 @@ erasemark(usize ss)
 static void
 drawstat(void)
 {
-	char s[256];
+	char s[256], *b[3];
 	Point p;
 
 	draw(screen, statr, col[Cbg], nil, ZP);
@@ -196,10 +190,18 @@ drawstat(void)
 		stereo ? "" : chan==0?"Left ":"Right ",
 		T / Sampsz, dot.cur);
 	p = string(screen, statr.min, col[Ctext], ZP, font, s);
-	if(dot.from > 0 || dot.to < dot.totalsz){
-		seprint(s, s+sizeof s, " from %τ to %τ", dot.from, dot.to);
-		p = string(screen, p, col[Cloop], ZP, font, s);
+	if(bound == Bstart){
+		b[0] = "[";
+		b[1] = "] ";
+		b[2] = " ";
+	}else{
+		b[0] = " ";
+		b[1] = " [";
+		b[2] = "]";
 	}
+	seprint(s, s+sizeof s, " %sfrom %τ%sto %τ%s",
+		b[0], dot.from, b[1], dot.to, b[2]);
+	p = string(screen, p, col[Cloop], ZP, font, s);
 	if(dot.off != dot.from && dot.off >= 0){
 		seprint(s, s+sizeof s, " last %τ", dot.off);
 		p = string(screen, p, col[Cins], ZP, font, s);
@@ -486,7 +488,7 @@ setloop(vlong off)
 		werrstr("invalid range");
 		return -1;
 	}
-	if(bound == 0)
+	if(bound == Bstart)
 		setrange(off, dot.to);
 	else
 		setrange(dot.from, off);

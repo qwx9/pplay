@@ -29,6 +29,10 @@ struct Dot{
 	Chunk *norris;
 };
 extern Dot dot;
+enum{
+	Bstart,
+	Bend,
+};
 extern int bound;
 
 extern QLock lsync;

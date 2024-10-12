@@ -7,7 +7,7 @@
 extern Channel *pidc;
 
 Dot dot;
-int bound = 1;
+int bound = Bend;
 
 static int epfd[2];
 
