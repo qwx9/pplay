@@ -18,7 +18,11 @@ HFILES=dat.h fns.h
 # override $MANFILES??
 TARG=\
 	pcmmix\
+	pcminv\
 	pplay\
 
 $O.pcmmix: pcmmix.$O
 	$LD $LDFLAGS -o $target pcmmix.$O
+
+$O.pcminv: pcminv.$O
+	$LD $LDFLAGS -o $target pcminv.$O
