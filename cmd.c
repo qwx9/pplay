@@ -9,6 +9,9 @@ extern Channel *pidc;
 Dot dot;
 int bound = Bend;
 
+int reader = -1;
+
+static Dot rdot;
 static int epfd[2];
 
 static int
@@ -136,12 +139,10 @@ static void
 rproc(void *efd)
 {
 	int fd;
-	Dot d, cd;
+	Dot cd;
 	Chunk *c;
 
-	d = dot;
-	if(d.from != 0 && d.to != d.totalsz)
-		d.off = -1;
+	reader = getpid();
 	fd = (intptr)efd;
 	if((c = loadfile(fd, &cd)) == nil){
 		fprint(2, "failed reading from pipe: %r");
@@ -149,11 +150,13 @@ rproc(void *efd)
 	}
 	close(fd);
 	qlock(&lsync);
-	chold(c, &d);
-	dot = d;
+	dot.from = rdot.from;
+	dot.to = rdot.to;
+	ccopy(&dot);
+	creplace(&dot, c);
+	dot.to = dot.from + cd.totalsz;
 	qunlock(&lsync);
-	if(paste(nil) < 0)
-		fprint(2, "paste: %r\n");
+	reader = -1;
 	redraw(1);
 	threadexits(nil);
 }
@@ -165,8 +168,14 @@ pipeline(char *arg, int rr, int wr)
 		fprint(2, "pipeline: too many backgrounded processes\n");
 		return -1;
 	}
-	if(rr)
+	if(rr){
+		if(reader >= 0){
+			fprint(2, "pipeline: editing operation already pending\n");
+			return -1;
+		}
 		reader = 0;
+		rdot = dot;
+	}
 	if(pipe(epfd) < 0)
 		sysfatal("pipe: %r");
 	if(procrfork(rc, arg, mainstacksize, RFFDG|RFNOTEG|RFNAMEG) < 0)
@@ -222,12 +231,14 @@ readfrom(char *s)
 {
 	int fd;
 
-	if((fd = open(s, OREAD)) < 0)
-		return -1;
-	if(procrfork(rproc, (int*)fd, mainstacksize, RFFDG) < 0){
-		fprint(2, "procrfork: %r\n");
+	if(reader >= 0){
+		werrstr("editing operation already pending");
 		return -1;
 	}
+	if((fd = open(s, OREAD)) < 0)
+		return -1;
+	if((reader = procrfork(rproc, (int*)fd, mainstacksize, RFFDG)) < 0)
+		return -1;
 	return 0;
 }
 

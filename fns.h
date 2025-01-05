@@ -3,6 +3,7 @@ void	freechain(Chunk*);
 void	killreader(void);
 int	unpop(char*);
 int	popop(char*);
+int	creplace(Dot*, Chunk*);
 int	cpaste(Dot*);
 Chunk*	ccopy(Dot*);
 void	chold(Chunk*, Dot*);

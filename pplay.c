@@ -11,7 +11,6 @@ extern QLock lsync;
 
 int stereo, chan;
 int debug, paused, notriob;
-int reader = -1;
 Channel *pidc;
 
 static Keyboardctl *kc;
@@ -27,6 +26,7 @@ killreader(void)
 	if(reader <= 0)
 		return;
 	postnote(PNGROUP, reader, "kill");
+	reader = -1;
 }
 
 static void
@@ -253,8 +253,6 @@ threadmain(int argc, char **argv)
 					break;
 				}
 			assert(i < nelem(pids));
-			if(reader == 0)
-				reader = pid;
 			nslots--;
 			break;
 		case Await:
@@ -265,8 +263,6 @@ threadmain(int argc, char **argv)
 				}
 			if(i == nelem(pids))
 				fprint(2, "phase error -- no such pid %d\n", w->pid);
-			if(w->pid == reader)
-				reader = -1;
 			nslots++;
 			free(w);
 			break;

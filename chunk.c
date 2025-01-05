@@ -11,8 +11,6 @@ struct Buf{
 	Ref;
 };
 
-// FIXME: crazy idea, multisnarf with addressable elements; $n registers; fork pplay to display them → ?
-
 typedef struct Op Op;
 struct Op{
 	Chunk *p1;
@@ -52,6 +50,21 @@ int
 	return fmtprint(fmt, "0x%08p N=%08zux →L=0x%08p ←R=0x%08p", c, c->len, c->left, c->right);
 }
 
+static usize
+clength(Chunk *r)
+{
+	usize len;
+	Chunk *c;
+
+	c = r;
+	len = 0;
+	do{
+		len += c->len;
+		c = c->right;
+	}while(c != r);
+	return len;
+}
+
 static void
 printchunks(Chunk *r)
 {
@@ -61,10 +74,12 @@ printchunks(Chunk *r)
 	c = r;
 	len = 0;
 	do{
+		fprint(2, "\t%χ\toff=%08zux\n", c, len);
 		assert(c->right->left == c);
 		len += c->len;
 		c = c->right;
 	}while(c != r);
+	fprint(2, "\n");
 }
 
 void
@@ -211,16 +226,20 @@ chainlen(Chunk *c)
 static Dot
 newdot(Dot *dp)
 {
+	usize sz;
 	Dot d = {0};
 	Chunk *c;
 
+	sz = dp->to - dp->from;
 	d.norris = dp->norris;
 	d.totalsz = d.norris->len;
 	/* paranoia */
 	for(c=d.norris->right; c!=d.norris; c=c->right)
 		d.totalsz += c->len;
 	d.cur = d.from = dp->from < d.totalsz ? dp->from : 0;
-	d.to = d.totalsz;
+	d.to = d.from + sz;
+	if(d.to > d.totalsz)
+		d.to = d.totalsz;
 	d.off = -1;
 	return d;
 }
@@ -258,7 +277,7 @@ unpop(char *)
 		return 0;
 	op = ophead++;
 	d = op->dot;
-	dprint(op->p1, "cmd/unpop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n",
+	dprint(op->p1, "cmd/unpop dot=%Δ\n\tP [ %χ ][ %χ ]\n\tLR [ %χ ][ %χ ]\n",
 		d, op->p1, op->p2, op->l, op->r);
 	linkchunk(op->p1->left, op->l);
 	unlink(op->p1, op->p2);
@@ -278,7 +297,7 @@ popop(char *)
 		return 0;
 	op = --ophead;
 	d = op->dot;
-	dprint(op->l, "cmd/pop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n",
+	dprint(op->l, "cmd/pop dot=%Δ\n\tP [ %χ ][ %χ ]\n\tLR [ %χ ][ %χ ]\n",
 		d, op->p1, op->p2, op->l, op->r);
 	linkchunk(op->l->left, op->p1);
 	unlink(op->l, op->r);
@@ -335,7 +354,7 @@ ccrop(Dot *d)
 		else
 			linkchunk(l, r);
 	}
-	dprint(d->norris, "ccrop dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n", d, p1, p2, l, r);
+	dprint(d->norris, "ccrop dot=%Δ\n\tP [ %χ ][ %χ ]\n\tLR [ %χ ][ %χ ]\n", d, p1, p2, l, r);
 	linkchunk(p1, l);
 	unlink(p2, p1);
 	pushop(p1, p2, l, r, d);
@@ -344,25 +363,27 @@ ccrop(Dot *d)
 }
 
 /* [p1]..[p2] → [l|p1]..[p2|r] → [l]..c..[r]  */
-static int
+int
 creplace(Dot *d, Chunk *c)
 {
-	usize foff, toff;
+	usize sz, foff, toff;
 	Chunk *p1, *p2, *l, *r;
 
 	assert(d->from <= d->totalsz && d->to - d->from > 0);
+	sz = clength(c);
 	p1 = p2c(d->from, &foff, d);
 	p2 = p2c(d->to, &toff, d);
 	l = splitchunk(p1, 0, foff);
 	r = splitchunk(p2, toff, p2->len);
 	linkchunk(l, c);
 	linkchunk(c, r);
-	dprint(d->norris, "creplace dot=%Δ P [%χ][%χ] LR [%χ][%χ]\n", d, p1, p2, l, r);
+	dprint(d->norris, "creplace dot=%Δ\n\tP [ %χ ][ %χ ]\n\tLR [ %χ ][ %χ ]\n", d, p1, p2, l, r);
 	linkchunk(p1->left, l);
 	unlink(p1, p2);
 	pushop(p1, p2, l, r, d);
 	if(p1 == d->norris)
 		d->norris = l;
+	d->to = d->from + sz;
 	*d = newdot(d);
 	return 0;
 }
@@ -371,23 +392,24 @@ creplace(Dot *d, Chunk *c)
 static int
 cinsert(Dot *d, Chunk *c)
 {
-	usize off;
+	usize sz, off;
 	Chunk *p1, *l, *r;
 
+	sz = clength(c);
 	assert(d->off != -1);
 	p1 = p2c(d->off, &off, d);
 	l = splitchunk(p1, 0, off);
 	r = splitchunk(p1, off, p1->len);
 	linkchunk(l, c);
 	linkchunk(c, r);
-	dprint(d->norris, "cinsert dot=%Δ P [%χ] LR [%χ][%χ]\n", d, p1, l, r);
+	dprint(d->norris, "cinsert dot=%Δ\n\tP [ %χ ]\n\tLR [ %χ ][ %χ ]\n", d, p1, l, r);
 	linkchunk(p1->left, l);
 	unlink(p1, p1);
 	pushop(p1, p1, l, r, d);
 	if(p1 == d->norris)
 		d->norris = l;
 	d->from = d->off;
-	d->to = d->totalsz;
+	d->to = d->from + sz;
 	*d = newdot(d);
 	return 0;
 }
@@ -436,7 +458,7 @@ ccopy(Dot *d)
 			linkchunk(l, clone(p1->right, p2->left));
 		linkchunk(l->left, r);
 	}
-	dprint(d->norris, "ccopy dot=%Δ\n\tP\t[ %χ ]\t[ %χ ]\n\tLR:\t[ %χ ]\t[ %χ ]\n",
+	dprint(d->norris, "ccopy dot=%Δ\n\tP [ %χ ][ %χ ]\n\tLR [ %χ ][ %χ ]\n",
 		d, p1, p2, l, p1 == p2 ? l : r);
 	hold.c = l;
 	hold.Dot = *d;
@@ -464,7 +486,7 @@ ccut(Dot *d)
 		p2 = p2c(d->to, &off, d);
 	r = splitchunk(p2, off, p2->len);
 	linkchunk(l, r);
-	dprint(d->norris, "ccut dot=%Δ\n\tP\t[ %χ ]\t[ %χ ]\n\tLR:\t[ %χ ]\t[ %χ ]\n",
+	dprint(d->norris, "ccut dot=%Δ\n\tP [ %χ ][ %χ ]\n\tLR [ %χ ][ %χ ]\n",
 		d, p1, p2, l, r);
 	linkchunk(p1->left, l);
 	unlink(p1, p2);
@@ -526,6 +548,7 @@ loadfile(int fd, Dot *d)
 	}
 	d->norris = c;
 	d->from = 0;
+	d->to = c->len;
 	*d = newdot(d);
 	return c;
 }
