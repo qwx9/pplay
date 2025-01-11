@@ -5,7 +5,10 @@
 #include "dat.h"
 #include "fns.h"
 
+/* FIXME: clean up, now that we're just using alt; ddot vs rdot, dot */
+
 QLock lsync;
+Channel *drawc;
 int samptime;
 
 enum{
@@ -24,7 +27,7 @@ static Rectangle statr;
 static usize views, viewe, viewmax, linepos;
 static int bgscalyl, bgscalyr;
 static double bgscalf;
-static Channel *drawc, *sampc;
+static Channel *sampc;
 static usize T;
 static int sampwidth = 1;	/* pixels per sample */
 static double zoom = 1.0;
@@ -32,6 +35,7 @@ static int stalerender, tworking;
 static int working;
 static vlong slen;
 static s16int *graph[2];
+static Dot ddot;
 
 #define Rrate	(1000.0 / 60.0)
 
@@ -78,7 +82,7 @@ int
 	usize p;
 
 	p = va_arg(fmt->args, usize);
-	if(p > dot.totalsz)
+	if(p > ddot.totalsz)
 		return fmtstrcpy(fmt, "-∞");
 	b2t(p, &th, &tm, &ts, &tμ);
 	if(samptime)
@@ -111,7 +115,7 @@ renderchunks(void)
 	usize p, off;
 	Chunk *c;
 
-	c = p2c(views, &off, &dot);
+	c = p2c(views, &off, &ddot);
 	for(p=views-off; p<viewe; p+=c->len, c=c->right){
 		if(p == 0)
 			continue;
@@ -123,10 +127,10 @@ static void
 rendermarks(void)
 {
 	renderchunks();
-	renderpos(dot.from, col[Cloop], 0);
-	renderpos(dot.to, col[Cloop], 0);
-	if(dot.off != dot.from)
-		renderpos(dot.off, col[Cins], 0);
+	renderpos(ddot.from, col[Cloop], 0);
+	renderpos(ddot.to, col[Cloop], 0);
+	if(ddot.off != ddot.from)
+		renderpos(ddot.off, col[Cins], 0);
 }
 
 static void
@@ -188,7 +192,7 @@ drawstat(void)
 	draw(screen, statr, col[Cbg], nil, ZP);
 	seprint(s, s+sizeof s, "%sT=%zd @ %τ",
 		stereo ? "" : chan==0?"Left ":"Right ",
-		T / Sampsz, dot.cur);
+		T / Sampsz, ddot.cur);
 	p = string(screen, statr.min, col[Ctext], ZP, font, s);
 	if(bound == Bstart){
 		b[0] = "[";
@@ -200,55 +204,34 @@ drawstat(void)
 		b[2] = "]";
 	}
 	seprint(s, s+sizeof s, " %sfrom %τ%sto %τ%s",
-		b[0], dot.from, b[1], dot.to, b[2]);
+		b[0], ddot.from, b[1], ddot.to, b[2]);
 	p = string(screen, p, col[Cloop], ZP, font, s);
-	if(dot.off != dot.from && dot.off >= 0){
-		seprint(s, s+sizeof s, " last %τ", dot.off);
+	if(ddot.off != ddot.from && ddot.off >= 0){
+		seprint(s, s+sizeof s, " last %τ", ddot.off);
 		p = string(screen, p, col[Cins], ZP, font, s);
 	}
 	statr.max.x = p.x;
 }
 
-static void
-drawproc(void*)
+void
+paint(int what)
 {
-	int what;
-	long Δt;
-	double t0, t;
-
-	threadsetname("drawer");
-	t0 = nsec() / 1000000.0 + Rrate;
-	for(;;){
-		what = Drawrender;
-		if(nbrecv(drawc, &what) < 0){
-			fprint(2, "drawproc: %r\n");
-			break;
-		}
-		lockdisplay(display);
-		if((what & Drawrender) != 0 || stalerender || working){
-			if(!working)
-				stalerender = 0;
-			render();
-			draw(screen, rectaddpt(view->r, screen->r.min), view, nil, ZP);
-		}else
-			erasemark(linepos);
-		renderpos(dot.cur, col[Cline], 1);
-		linepos = dot.cur;
-		drawstat();
-		flushimage(display, 1);
-		unlockdisplay(display);
-		t = nsec() / 1000000.0;
-		Δt = t0 - t;
-		if(Δt > 0)
-			sleep(Δt);
-		else{
-			Δt = -Δt;
-			t0 += Δt - Δt % (long)Rrate;
-		}
-		t0 += Rrate;
-	}
+	ddot = dot;
+	lockdisplay(display);
+	if((what & Drawrender) != 0 || stalerender || working){
+		if(!working)
+			stalerender = 0;
+		render();
+		draw(screen, rectaddpt(view->r, screen->r.min), view, nil, ZP);
+	}else
+		erasemark(linepos);
+	renderpos(ddot.cur, col[Cline], 1);
+	linepos = ddot.cur;
+	drawstat();
+	flushimage(display, 1);
+	unlockdisplay(display);
 }
- 
+
 /* throttling of draw requests happens here */
 void
 refresh(int what)
@@ -350,11 +333,11 @@ resetview(int all)
 	usize span;
 
 	lockdisplay(display);
-	T = (vlong)(dot.totalsz / zoom / Dx(screen->r)) & ~3;
+	T = (vlong)(ddot.totalsz / zoom / Dx(screen->r)) & ~3;
 	if(T < Sampsz)
 		T = Sampsz;
 	span = Dx(screen->r) * T;
-	viewmax = dot.totalsz - span;
+	viewmax = ddot.totalsz - span;
 	if(views > viewmax)
 		views = viewmax;
 	viewe = views + span;
@@ -368,10 +351,12 @@ redraw(int all)
 {
 	Dot d;
 
+	ddot = dot;
 	resetview(all);
 	if(paused)
 		refresh(Drawall);
-	d = dot;
+		
+	d = ddot;
 	d.from = d.cur = views;
 	d.to = viewe;
 	nbsend(sampc, &d);
@@ -388,8 +373,8 @@ setzoom(int Δz, int x)
 		z = zoom * pow(1.025, Δz);
 	if(z < 1.0)
 		z = 1.0;
-	else if(z > (dot.totalsz / Sampsz) / Dx(screen->r))
-		z = (dot.totalsz / Sampsz) / Dx(screen->r);
+	else if(z > (ddot.totalsz / Sampsz) / Dx(screen->r))
+		z = (ddot.totalsz / Sampsz) / Dx(screen->r);
 	if(z == zoom)
 		return;
 	zoom = z;
@@ -408,8 +393,8 @@ zoominto(vlong from, vlong to)
 	if(from < 0)
 		from = 0;
 	from &= ~3;
-	if(to >= dot.totalsz)
-		to = dot.totalsz;
+	if(to >= ddot.totalsz)
+		to = ddot.totalsz;
 	to &= ~3;
 	if((to - from) / Sampsz < Dx(screen->r)){
 		werrstr("range too small");
@@ -417,7 +402,7 @@ zoominto(vlong from, vlong to)
 	}
 	views = from;
 	viewe = to;
-	zoom = (double)dot.totalsz / (to - from);
+	zoom = (double)ddot.totalsz / (to - from);
 	redraw(0);
 	return 0;
 }
@@ -456,12 +441,13 @@ setrange(usize from, usize to)
 	to &= ~3;
 	if(from >= to)
 		return;
-	dot.from = from;
-	dot.to = to;
+	ddot.from = from;
+	ddot.to = to;
 	/* advance may desync and reset it again */
-	if(dot.cur < from || dot.cur >= to)
-		dot.cur = from;
-	dot.off = -1;
+	if(ddot.cur < from || ddot.cur >= to)
+		ddot.cur = from;
+	ddot.off = -1;
+	dot = ddot;
 	stalerender = 1;
 	refresh(Drawrender);
 }
@@ -470,11 +456,12 @@ int
 setjump(vlong off)
 {
 	off &= ~3;
-	if(off < dot.from || off > dot.to - Sampsz){
+	if(off < ddot.from || off > ddot.to - Sampsz){
 		werrstr("cannot jump outside of loop bounds");
 		return -1;
 	}
-	dot.off = dot.cur = off;
+	ddot.off = ddot.cur = off;
+	dot = ddot;
 	stalerender = 1;
 	refresh(Drawrender);
 	return 0;
@@ -484,14 +471,14 @@ int
 setloop(vlong off)
 {
 	off &= ~3;
-	if(off < 0 || off > dot.totalsz){
+	if(off < 0 || off > ddot.totalsz){
 		werrstr("invalid range");
 		return -1;
 	}
 	if(bound == Bstart)
-		setrange(off, dot.to);
+		setrange(off, ddot.to);
 	else
-		setrange(dot.from, off);
+		setrange(ddot.from, off);
 	return 0;
 }
 
@@ -519,11 +506,10 @@ initdrw(int fuckit)
 		col[Cloop] = eallocimage(Rect(0,0,1,1), 1, 0x8888CCFF);
 		col[Cchunk] = eallocimage(Rect(0,0,1,1), 1, 0xEE0000FF);
 	}
-	if((drawc = chancreate(sizeof(int), 0)) == nil
+	if((drawc = chancreate(sizeof(int), 8)) == nil
 	|| (sampc = chancreate(sizeof(Dot), 2)) == nil)
 		sysfatal("chancreate: %r");
 	redraw(1);
-	if(proccreate(sampler, nil, mainstacksize) < 0
-	|| proccreate(drawproc, nil, mainstacksize) < 0)
+	if(proccreate(sampler, nil, mainstacksize) < 0)
 		sysfatal("proccreate: %r");
 }

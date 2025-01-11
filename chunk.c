@@ -410,6 +410,7 @@ cinsert(Dot *d, Chunk *c)
 		d->norris = l;
 	d->from = d->off;
 	d->to = d->from + sz;
+	/* FIXME: get rid of indirection */
 	*d = newdot(d);
 	return 0;
 }

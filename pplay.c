@@ -8,6 +8,7 @@
 #include "fns.h"
 
 extern QLock lsync;
+extern Channel *drawc;
 
 int stereo, chan;
 int debug, paused, notriob;
@@ -129,7 +130,7 @@ usage(void)
 void
 threadmain(int argc, char **argv)
 {
-	int i, pid;
+	int i, what, pid;
 	char *p;
 	Mouse m, mo;
 	Channel *waitc;
@@ -167,13 +168,14 @@ threadmain(int argc, char **argv)
 	if(proccreate(aproc, nil, 16*1024) < 0)
 		sysfatal("threadcreate: %r");
 	toggleplay();
-	waitc = threadwaitchan();
+	waitc = threadwaitchan();	/* FIXME: unused?? */
 	enum{
 		Aresize,
 		Amouse,
 		Akey,
 		Apid,
 		Await,
+		Adraw,
 	};
 	Alt a[] = {
 		[Aresize] {mc->resizec, nil, CHANRCV},
@@ -181,6 +183,7 @@ threadmain(int argc, char **argv)
 		[Akey] {kc->c, &r, CHANRCV},
 		[Apid] {pidc, &pid, CHANRCV},
 		[Await] {waitc, &w, CHANRCV},
+		[Adraw] {drawc, &what, CHANRCV},
 		{nil, nil, CHANEND}
 	};
 	for(;;){
@@ -265,6 +268,8 @@ threadmain(int argc, char **argv)
 				fprint(2, "phase error -- no such pid %d\n", w->pid);
 			nslots++;
 			free(w);
+		case Adraw:
+			paint(what);
 			break;
 		}
 	}
