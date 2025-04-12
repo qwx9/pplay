@@ -24,7 +24,6 @@ int	setjump(vlong);
 vlong	ss2view(int);
 vlong	view2ss(int);
 void	reset(int);
-void	redraw(int);
 void	paint(int);
 void	initdrw(int);
 void	advance(usize);

@@ -157,7 +157,7 @@ rproc(void *efd)
 	dot.to = dot.from + cd.totalsz;
 	qunlock(&lsync);
 	reader = -1;
-	refresh(Drawall);
+	refresh(Rall);
 	threadexits(nil);
 }
 

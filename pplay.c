@@ -86,7 +86,7 @@ again:
 			}
 			memcpy(bp, b, n);
 			advance(n);
-			refresh(Drawcur);
+			refresh(Rcur);
 		}
 		if(write(afd, buf, sizeof buf) != sizeof buf){
 			fprint(2, "aproc write: %r\n");
@@ -194,7 +194,7 @@ threadmain(int argc, char **argv)
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
 			unlockdisplay(display);
-			redraw(1);
+			refresh(Rreset);
 			break;
 		case Amouse:
 			m = mc->Mouse;
@@ -222,7 +222,7 @@ threadmain(int argc, char **argv)
 			case '+': setzoom(1.0, mo.xy.x - screen->r.min.x); m.xy.x = mo.xy.x; break;
 			case '1': bound = Bstart; break;
 			case '2': bound = Bend; break;
-			case 'S': stereo ^= 1; redraw(1); break;
+			case 'S': stereo ^= 1; refresh(Rall); break;
 			case 'b': setjump(dot.from); break;
 			case 't': samptime ^= 1; break;
 			case 'z': zoominto(0, dot.totalsz); break;
@@ -233,14 +233,14 @@ threadmain(int argc, char **argv)
 			case 'q': threadexitsall(nil);
 			default:
 				if((p = prompt(r)) == nil || strlen(p) == 0){
-					refresh(Drawrender);
+					refresh(Rrender);
 					break;
 				}
 				switch(cmd(p)){
 				case -1: fprint(2, "cmd \"%s\" failed: %r\n", p); break;
-				case 0: refresh(Drawall); break;
-				case 1: redraw(0); break;
-				case 2: redraw(1); break;
+				case 0: refresh(Rrender); break;
+				case 1: refresh(Rredraw); break;
+				case 2: refresh(Rall); break;
 				default: break;
 				}
 			}

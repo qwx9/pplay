@@ -38,9 +38,13 @@ extern int bound;
 extern QLock lsync;
 
 enum{
-	Drawcur = 1<<0,
-	Drawrender = 1<<1,
-	Drawall = (1<<2) - 1,
+	Rcur = 1<<0,
+	Rrender = 1<<1,
+	Rsamp = 1<<2,
+	Rview = 1<<3,
+	Rreset = 1<<4,
+	Rredraw = Rrender | Rsamp | Rreset,
+	Rall = 0x7fffffff,
 };
 
 extern int stereo, chan;

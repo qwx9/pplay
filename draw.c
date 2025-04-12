@@ -213,12 +213,62 @@ drawstat(void)
 	statr.max.x = p.x;
 }
 
+static void
+resetdraw(void)
+{
+	Rectangle viewr;
+
+	viewr = rectsubpt(screen->r, screen->r.min);
+	statr = screen->r;
+	if(stereo){
+		statr.min.y += (Dy(screen->r) - font->height) / 2 + 1;
+		statr.max.y = statr.min.y + font->height;
+	}else
+		statr.min.y = screen->r.max.y - font->height;
+	freeimage(view);
+	view = eallocimage(viewr, 0, DNofill);
+	bgscalyl = (viewr.max.y - font->height) / (1 * (stereo ? 4 : 2));
+	bgscalyr = viewr.max.y - bgscalyl;
+	bgscalf = 32767. / bgscalyl;
+}
+
+static void
+resetview(int all)
+{
+	usize span;
+
+	lockdisplay(display);
+	T = (vlong)(ddot.totalsz / zoom / Dx(screen->r)) & ~3;
+	if(T < Sampsz)
+		T = Sampsz;
+	span = Dx(screen->r) * T;
+	viewmax = ddot.totalsz - span;
+	if(views > viewmax)
+		views = viewmax;
+	viewe = views + span;
+	if(all)
+		resetdraw();
+	unlockdisplay(display);
+}
+
 void
 paint(int what)
 {
+	Dot d;
+
 	ddot = dot;
+	if(what & Rreset)
+		resetview(1);
+	else if(what & Rview)
+		resetview(0);
 	lockdisplay(display);
-	if((what & Drawrender) != 0 || stalerender || working){
+	if(what & Rsamp){
+		d = ddot;
+		d.from = d.cur = views;
+		d.to = viewe;
+		nbsend(sampc, &d);
+	}
+	if(what & Rrender || stalerender || working){
 		if(!working)
 			stalerender = 0;
 		render();
@@ -304,62 +354,8 @@ again:
 		*r++ = rmax;
 	}
 	working--;
-	refresh(Drawrender);
+	refresh(Rrender);
 	goto again;
-}
-
-static void
-resetdraw(void)
-{
-	Rectangle viewr;
-
-	viewr = rectsubpt(screen->r, screen->r.min);
-	statr = screen->r;
-	if(stereo){
-		statr.min.y += (Dy(screen->r) - font->height) / 2 + 1;
-		statr.max.y = statr.min.y + font->height;
-	}else
-		statr.min.y = screen->r.max.y - font->height;
-	freeimage(view);
-	view = eallocimage(viewr, 0, DNofill);
-	bgscalyl = (viewr.max.y - font->height) / (1 * (stereo ? 4 : 2));
-	bgscalyr = viewr.max.y - bgscalyl;
-	bgscalf = 32767. / bgscalyl;
-}
-
-static void
-resetview(int all)
-{
-	usize span;
-
-	lockdisplay(display);
-	T = (vlong)(ddot.totalsz / zoom / Dx(screen->r)) & ~3;
-	if(T < Sampsz)
-		T = Sampsz;
-	span = Dx(screen->r) * T;
-	viewmax = ddot.totalsz - span;
-	if(views > viewmax)
-		views = viewmax;
-	viewe = views + span;
-	if(all)
-		resetdraw();
-	unlockdisplay(display);
-}
-
-void
-redraw(int all)
-{
-	Dot d;
-
-	ddot = dot;
-	resetview(all);
-	if(paused)
-		refresh(Drawall);
-		
-	d = ddot;
-	d.from = d.cur = views;
-	d.to = viewe;
-	nbsend(sampc, &d);
 }
 
 void
@@ -384,7 +380,7 @@ setzoom(int Δz, int x)
 	span *= Dx(screen->r);
 	Δx = ((double)x / Dx(screen->r)) * span / T;
 	if(!setpan(Δx))
-		redraw(0);
+		refresh(Rview);
 }
 
 int
@@ -403,7 +399,7 @@ zoominto(vlong from, vlong to)
 	views = from;
 	viewe = to;
 	zoom = (double)ddot.totalsz / (to - from);
-	redraw(0);
+	refresh(Rview);
 	return 0;
 }
 
@@ -424,7 +420,7 @@ setpan(int Δx)
 	if(new == views)
 		return 0;
 	views = new;
-	redraw(0);
+	refresh(Rview);
 	return 1;
 }
 
@@ -449,7 +445,7 @@ setrange(usize from, usize to)
 	ddot.off = -1;
 	dot = ddot;
 	stalerender = 1;
-	refresh(Drawrender);
+	refresh(Rrender);
 }
 
 int
@@ -463,7 +459,7 @@ setjump(vlong off)
 	ddot.off = ddot.cur = off;
 	dot = ddot;
 	stalerender = 1;
-	refresh(Drawrender);
+	refresh(Rrender);
 	return 0;
 }
 
@@ -509,7 +505,7 @@ initdrw(int fuckit)
 	if((drawc = chancreate(sizeof(int), 8)) == nil
 	|| (sampc = chancreate(sizeof(Dot), 2)) == nil)
 		sysfatal("chancreate: %r");
-	redraw(1);
 	if(proccreate(sampler, nil, mainstacksize) < 0)
 		sysfatal("proccreate: %r");
+	refresh(Rall);
 }
