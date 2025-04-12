@@ -194,7 +194,7 @@ threadmain(int argc, char **argv)
 			if(getwindow(display, Refnone) < 0)
 				sysfatal("resize failed: %r");
 			unlockdisplay(display);
-			refresh(Rreset);
+			refresh(Rreset | Rsamp);
 			break;
 		case Amouse:
 			m = mc->Mouse;
