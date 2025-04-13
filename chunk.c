@@ -359,6 +359,7 @@ ccrop(Dot *d)
 	unlink(p2, p1);
 	pushop(p1, p2, l, r, d);
 	d->norris = l;
+	d->from = 0;
 	*d = newdot(d);
 }
 
