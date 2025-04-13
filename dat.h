@@ -41,7 +41,7 @@ enum{
 	Rcur = 1<<0,
 	Rrender = 1<<1,
 	Rsamp = 1<<2,
-	Rview = 1<<3,
+	Rview = 1<<3 | Rsamp,
 	Rreset = 1<<4,
 	Rredraw = Rrender | Rsamp | Rreset,
 	Rall = 0x7fffffff,
